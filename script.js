@@ -173,6 +173,7 @@ function formatIsoToDateTimeBR(isoStr) {
   };
 }
 
+// normaliza qualquer coisa para "YYYY-MM-DD" quando possível
 function normalizeToIsoDateString(raw) {
   if (!raw) return null;
   let s = String(raw).trim();
@@ -338,8 +339,8 @@ function syncPlantingFiltersFromDashboard() {
   const map = new Map();
 
   cultures.forEach((cult) => {
-    const plant = cult.planting_date;
-    const harvest = cult.expected_harvest_date;
+    const plant = normalizeToIsoDateString(cult.planting_date);
+    const harvest = normalizeToIsoDateString(cult.expected_harvest_date);
     if (!plant) return;
 
     const start = plant;
@@ -545,10 +546,11 @@ function selectSimeparDailyRecord(dataRaw) {
   function recIsoDate(rec) {
     const d1 = rec.DataPrevisao || rec.data || rec.Data || null;
     if (!d1) return null;
-    if (String(d1).includes("/")) {
-      return dateBRToISO(String(d1));
+    const s = String(d1);
+    if (s.includes("/")) {
+      return dateBRToISO(s);
     }
-    return String(d1).split(" ")[0];
+    return s.split(" ")[0];
   }
 
   let subset = arr.filter((r) => recIsoDate(r) === isoFilter);
@@ -645,7 +647,9 @@ function renderPlugDaily(visualEl, dataRaw) {
   grid.appendChild(createMetric("Chuva (mm)", data.precipitacao_mm ?? "-", "rain"));
   grid.appendChild(createMetric("T. Máx (°C)", data.temp_max ?? "-", "temp"));
   grid.appendChild(createMetric("T. Mín (°C)", data.temp_min ?? "-", "temp"));
-  grid.appendChild(createMetric("Umidade média do ar (%)", data.umidade_media ?? "-", "air"));
+  grid.appendChild(
+    createMetric("Umidade média do ar (%)", data.umidade_media ?? "-", "air")
+  );
 
   visualEl.appendChild(grid);
 }
@@ -822,16 +826,17 @@ function renderCanteiros(visualEl, data) {
   [...canteiros].reverse().forEach((canteiro) => {
     const id = canteiro.id;
     if (id && !uniqueCanteiros.has(id)) {
-      if (id === 1) {
-        const hasData =
-          canteiro.soil_humidity !== undefined ||
-          canteiro.soil_temperature !== undefined ||
-          canteiro.air_humitidy !== undefined ||
-          canteiro.air_temperature !== undefined ||
-          canteiro.last_irrigation !== undefined ||
-          (canteiro.culture && canteiro.culture.name) ||
-          canteiro.status !== undefined;
+      const airHum = canteiro.air_humitidy ?? canteiro.air_humidity;
+      const hasData =
+        canteiro.soil_humidity !== undefined ||
+        canteiro.soil_temperature !== undefined ||
+        airHum !== undefined ||
+        canteiro.air_temperature !== undefined ||
+        canteiro.last_irrigation !== undefined ||
+        (canteiro.culture && canteiro.culture.name) ||
+        canteiro.status !== undefined;
 
+      if (id === 1) {
         if (hasData) {
           uniqueCanteiros.set(id, canteiro);
         }
@@ -843,10 +848,11 @@ function renderCanteiros(visualEl, data) {
 
   const canteirosUnicos = Array.from(uniqueCanteiros.values());
   const canteirosComDados = canteirosUnicos.filter((c) => {
+    const airHum = c.air_humitidy ?? c.air_humidity;
     return (
       c.soil_humidity !== undefined ||
       c.soil_temperature !== undefined ||
-      c.air_humitidy !== undefined ||
+      airHum !== undefined ||
       c.air_temperature !== undefined ||
       c.last_irrigation !== undefined ||
       (c.culture && c.culture.name) ||
@@ -902,6 +908,8 @@ function renderCanteiros(visualEl, data) {
       body.appendChild(wrapper);
     }
 
+    const airHum = c.air_humitidy ?? c.air_humidity;
+
     addField("Área (m²)", c.area);
     addField("Cultura", c.culture?.name || "—");
     addField(
@@ -914,7 +922,7 @@ function renderCanteiros(visualEl, data) {
     );
     addField(
       "Umidade ar (%)",
-      c.air_humitidy?.toFixed?.(1) ?? c.air_humitidy ?? "—"
+      airHum?.toFixed?.(1) ?? airHum ?? "—"
     );
     addField(
       "Temp. ar (°C)",
@@ -1149,7 +1157,10 @@ function selectIrrigationRecord(dataArray) {
   let subset = dataArray;
 
   if (date) {
-    subset = subset.filter((d) => d.Data === date);
+    subset = subset.filter((d) => {
+      const iso = normalizeToIsoDateString(d.Data || d.Date || d.data);
+      return iso === date;
+    });
     if (!subset.length) {
       subset = dataArray;
     }
@@ -1207,7 +1218,7 @@ function buildSimeparDailyMap() {
     if (!rawDate) return;
 
     const dateOnly = String(rawDate).split(" ")[0];
-    const isoDate = dateOnly.includes("/") ? dateBRToISO(dateOnly) : dateOnly;
+    const isoDate = normalizeToIsoDateString(dateOnly);
     if (!isoDate) return;
 
     const eto =
@@ -1281,14 +1292,7 @@ function renderIrrigationRBS(visualEl, dataRaw) {
   const simeMap = buildSimeparDailyMap();
 
   const rawDateRbs = data.Data || data.Date || data.data || null;
-  let isoDateRbs = null;
-
-  if (rawDateRbs) {
-    const dateOnlyRbs = String(rawDateRbs).split(" ")[0];
-    isoDateRbs = dateOnlyRbs.includes("/")
-      ? dateBRToISO(dateOnlyRbs)
-      : dateOnlyRbs;
-  }
+  let isoDateRbs = normalizeToIsoDateString(rawDateRbs);
 
   const sime = isoDateRbs ? simeMap[isoDateRbs] : null;
 
@@ -1665,7 +1669,7 @@ function renderIrrigationRL(visualEl, dataRaw) {
 
   if (
     (det.dep_after_partial !== undefined && det.dep_after_partial !== null && !Number.isNaN(Number(det.dep_after_partial))) ||
-    (det.dep_after !== undefined && det.dep_after !== null && !Number.isNaN(Number(det.dep_after)))
+    (det.dep_after !== undefined && det.dep_after !== null && !Number.isNaN(det.dep_after))
   ) {
     const depVal = det.dep_after_partial ?? det.dep_after;
     gridContexto.appendChild(
@@ -1760,14 +1764,6 @@ function renderIrrigationRL(visualEl, dataRaw) {
       createMetric("T. mín do dia (°C)", fmtNum(tMin, 2), "temp")
     );
   }
-
-  /*
-  if (hasRain) {
-    gridEstados.appendChild(
-      createMetric("Chuva do dia (mm)", fmtNum(rain, 2), "rain")
-    );
-  }
-  */
 
   if (hasEto) {
     gridEstados.appendChild(
@@ -2106,20 +2102,21 @@ function updateHighlightFromRBS(rec) {
   const extra = document.getElementById("highlightRbsExtra");
   if (!info || !rec) return;
 
-  const data = rec.Data || "-";
+  const dataStr = rec.Data || rec.Date || rec.data || "-";
+  const iso = normalizeToIsoDateString(dataStr) || dataStr;
   const hora = rec.Horario || "-";
   const vol = fmtNum(rec.Volume_irrigacao, 2);
   const canteiro = rec.CanteiroNome
     ? `${rec.CanteiroNome} (${rec.Canteiro})`
     : rec.Canteiro ?? "-";
 
-  info.textContent = `${formatDateBR(data)} às ${hora} • Canteiro ${canteiro} • ${vol} mm`;
+  info.textContent = `${iso !== "-" ? formatDateBR(iso) : "-"} às ${hora} • Canteiro ${canteiro} • ${vol} mm`;
 
   const detRoot = rec.ExplicacaoDetalhada || rec.Detalhes || {};
   const meteor = detRoot["1_Meteorologia"] || detRoot || {};
 
   const simeMap = buildSimeparDailyMap();
-  const sime = data ? simeMap[data] : null;
+  const sime = iso ? simeMap[iso] : null;
 
   const eto =
     sime?.eto ??
@@ -2143,6 +2140,15 @@ function updateHighlightFromRBS(rec) {
 
   const parts = [];
 
+  if (eto !== null && eto !== undefined && !Number.isNaN(Number(eto))) {
+    parts.push(`ETo ≈ ${fmtNum(Number(eto), 2)} mm`);
+  }
+  if (etc !== null && etc !== undefined && !Number.isNaN(Number(etc))) {
+    parts.push(`ETc ≈ ${fmtNum(Number(etc), 2)} mm`);
+  }
+  if (chuva !== null && chuva !== undefined && !Number.isNaN(Number(chuva))) {
+    parts.push(`Chuva do dia ≈ ${fmtNum(Number(chuva), 2)} mm`);
+  }
 
   if (extra) {
     extra.textContent = parts.length ? parts.join(" • ") : "";
@@ -2154,7 +2160,8 @@ function updateHighlightFromRL(rec, doseFinal, estadosResumo = {}) {
   const extra = document.getElementById("highlightRlExtra");
   if (!info || !rec) return;
 
-  const data = rec.Data || "-";
+  const dataStr = rec.Data || rec.Date || rec.data || "-";
+  const iso = normalizeToIsoDateString(dataStr) || dataStr;
   const hora = rec.Horario || "-";
   const canteiro = rec.CanteiroNome
     ? `${rec.CanteiroNome} (${rec.Canteiro})`
@@ -2164,13 +2171,13 @@ function updateHighlightFromRL(rec, doseFinal, estadosResumo = {}) {
       ? doseFinal.toFixed(2) + " mm"
       : String(doseFinal ?? "—");
 
-  info.textContent = `${formatDateBR(data)} às ${hora} • Canteiro ${canteiro} • ${doseStr}`;
+  info.textContent = `${iso !== "-" ? formatDateBR(iso) : "-"} às ${hora} • Canteiro ${canteiro} • ${doseStr}`;
 
   const det = rec.Detalhes || rec.ExplicacaoDetalhada || {};
   const etc = estadosResumo.etc ?? det.etc_mm_day ?? null;
 
   const simeMap = buildSimeparDailyMap();
-  const sime = data ? simeMap[data] : null;
+  const sime = iso ? simeMap[iso] : null;
   const eto =
     estadosResumo.eto ??
     sime?.eto ??
@@ -2194,6 +2201,19 @@ function updateHighlightFromRL(rec, doseFinal, estadosResumo = {}) {
     null;
 
   const parts = [];
+
+  if (eto !== null && eto !== undefined && !Number.isNaN(Number(eto))) {
+    parts.push(`ETo ≈ ${fmtNum(Number(eto), 2)} mm`);
+  }
+  if (etc !== null && etc !== undefined && !Number.isNaN(Number(etc))) {
+    parts.push(`ETc ≈ ${fmtNum(Number(etc), 2)} mm`);
+  }
+  if (chuva !== null && chuva !== undefined && !Number.isNaN(Number(chuva))) {
+    parts.push(`Chuva do dia ≈ ${fmtNum(Number(chuva), 2)} mm`);
+  }
+  if (tMax !== null && tMax !== undefined && !Number.isNaN(Number(tMax))) {
+    parts.push(`Tmax ≈ ${fmtNum(Number(tMax), 1)} °C`);
+  }
 
   if (extra) {
     extra.textContent = parts.length ? parts.join(" • ") : "";
@@ -2360,8 +2380,10 @@ function buildHistoryRows() {
   const rows = [];
 
   (historicalData.irrigationRBS || []).forEach((rec) => {
-    if (!rec || !rec.Data) return;
-    const date = rec.Data;
+    if (!rec) return;
+    const isoDate = normalizeToIsoDateString(rec.Data || rec.Date || rec.data);
+    if (!isoDate) return;
+
     const time = (rec.Horario || "00:00").slice(0, 5);
     const canteiro = rec.CanteiroNome
       ? `${rec.CanteiroNome} (${rec.Canteiro})`
@@ -2377,7 +2399,7 @@ function buildHistoryRows() {
     const detRoot = rec.ExplicacaoDetalhada || rec.Detalhes || {};
     const meteor = detRoot["1_Meteorologia"] || detRoot || {};
 
-    const chuvaSime = simeMap[date]?.rain ?? null;
+    const chuvaSime = simeMap[isoDate]?.rain ?? null;
     const chuva =
       meteor.Chuva_real_mm ??
       detRoot.Chuva_real ??
@@ -2387,7 +2409,7 @@ function buildHistoryRows() {
       null;
 
     rows.push({
-      date,
+      date: isoDate,
       time,
       method: "RBS",
       canteiro,
@@ -2398,8 +2420,10 @@ function buildHistoryRows() {
   });
 
   (historicalData.irrigationRL || []).forEach((rec) => {
-    if (!rec || !rec.Data) return;
-    const date = rec.Data;
+    if (!rec) return;
+    const isoDate = normalizeToIsoDateString(rec.Data || rec.Date || rec.data);
+    if (!isoDate) return;
+
     const time = (rec.Horario || "00:00").slice(0, 5);
     const canteiro = rec.CanteiroNome
       ? `${rec.CanteiroNome} (${rec.Canteiro})`
@@ -2418,7 +2442,7 @@ function buildHistoryRows() {
     const volume = Number(vol);
     const tipo = rec.Tipo || "RL-PPO";
 
-    const chuvaSime = simeMap[date]?.rain ?? null;
+    const chuvaSime = simeMap[isoDate]?.rain ?? null;
     const chuva =
       det.rain_mm_day ??
       estados.Rain_mm_dia ??
@@ -2429,7 +2453,7 @@ function buildHistoryRows() {
       null;
 
     rows.push({
-      date,
+      date: isoDate,
       time,
       method: "RL",
       canteiro,
