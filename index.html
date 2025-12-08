@@ -12,6 +12,7 @@
 
 <body>
 
+  <!-- ================= LANDING / SELEÇÃO DE PROPRIEDADE ================= -->
   <section id="landing" class="landing">
     <header class="landing-header">
       <div class="landing-title">
@@ -104,6 +105,7 @@
     </footer>
   </section>
 
+  <!-- ================= DASHBOARD PRINCIPAL ================= -->
   <div id="appWrapper" class="app-wrapper app-hidden">
     <header class="app-header">
       <div class="app-header-left">
@@ -126,17 +128,18 @@
             (<code>raspbpibucket/dashboard/</code>) para a unidade Dois Vizinhos.
           </p>
 
+          <!-- Estilização local da área do título -->
           <style>
             .title-with-icon {
               display: flex;
               align-items: center;
-              gap: 6px; 
-              margin-left: -10px; 
+              gap: 6px;
+              margin-left: -10px;
             }
 
             .title-icon {
-              width: 48px;  
-              height: 48px; 
+              width: 48px;
+              height: 48px;
               object-fit: contain;
               border-radius: 8px;
             }
@@ -165,10 +168,10 @@
       </div>
     </header>
 
-
     <main class="app-main">
+      <!-- =============== VIEW: DASHBOARD TEMPO REAL =============== -->
       <section id="dashboardView" class="view view-active">
-        <!-- Destaques de última decisão (RBS / RL) -->
+        <!-- Destaques RBS / RL -->
         <section class="highlight-strip">
           <article class="highlight-card" id="highlightRBS">
             <h2>Última decisão RBS</h2>
@@ -183,7 +186,7 @@
           </article>
         </section>
 
-        <!-- Seção principal / cards por tópico -->
+        <!-- Cards por tópico -->
         <section class="section">
           <div class="section-header">
             <div>
@@ -230,7 +233,7 @@
         </section>
       </section>
 
-      <!-- ====================== VIEW: HISTÓRICO ====================== -->
+      <!-- =============== VIEW: HISTÓRICO E ANÁLISES =============== -->
       <section id="historyView" class="view view-hidden">
         <header class="history-header">
           <div>
@@ -242,6 +245,7 @@
           </div>
         </header>
 
+        <!-- Seleção de plantio -->
         <section class="planting-selector-section">
           <div class="planting-selector-header">
             <h3>Selecione o plantio</h3>
@@ -252,8 +256,9 @@
             </p>
           </div>
 
-          <div id="plantingButtonsContainer" class="planting-buttons-container modern-planting-buttons">
-
+          <div
+            id="plantingButtonsContainer"
+            class="planting-buttons-container modern-planting-buttons">
           </div>
 
           <p id="plantingSelectedInfo" class="planting-selected-info">
@@ -302,15 +307,15 @@
         <section class="history-chart-section">
           <h3>Gráfico de lâminas de irrigação (RBS × RL)</h3>
           <p class="history-chart-subtitle">
-            Cada ponto representa uma decisão de irrigação filtrada. Passe o mouse
-            para ver a data e método. A previsão/ETc do dia aparece nos detalhes da tabela.
+            Cada barra representa a lâmina diária acumulada por método.
+            Passe o mouse para ver os valores exatos.
           </p>
           <div class="history-chart-wrapper">
             <canvas id="historyChart"></canvas>
           </div>
         </section>
 
-        <!-- Tabela de histórico -->
+        <!-- Tabela de histórico (SEM coluna de chuva) -->
         <section class="history-table-section">
           <h3>Registros filtrados</h3>
           <div class="history-table-wrapper">
@@ -323,7 +328,6 @@
                   <th>Canteiro</th>
                   <th>Volume (mm)</th>
                   <th>Tipo / Regra</th>
-                  <th>Chuva (mm)</th>
                 </tr>
               </thead>
               <tbody id="historyTableBody">
@@ -348,4 +352,3 @@
   <script src="script.js"></script>
 </body>
 </html>
-
