@@ -1339,7 +1339,7 @@ function renderIrrigationRBS(visualEl, dataRaw) {
   const sime = isoDateRbs ? simeMap[isoDateRbs] : null;
 
   // ====== ETc: usar apenas o PREVISTO ======
-  const etcPrev = meteor.ETc_previsto_mm ?? detRoot.ETc_previsto ?? null;
+  const etcPrev = meteor.ETo_diario_SIMEPAR_mm ?? meteor.ETc_previsto_mm ?? detRoot.ETc_previsto ?? null;
 
   // ====== CHUVA REAL: Plugfield horário ACUMULADA até o horário ======
   const chuvaRealFromPlug =
@@ -1444,7 +1444,7 @@ function renderIrrigationRBS(visualEl, dataRaw) {
   gridMeteo.style.marginTop = "0.6rem";
 
   gridMeteo.appendChild(
-    createMetric("ETc previsto (mm)", fmtNum(etcPrev, 3), "rbs-context")
+    createMetric("ETo do dia (mm)", fmtNum(etcPrev, 3), "rbs-context")
   );
   gridMeteo.appendChild(
     createMetric(
@@ -2902,3 +2902,4 @@ document.addEventListener("DOMContentLoaded", () => {
     backBtn.addEventListener("click", showLanding);
   }
 });
+
