@@ -1139,8 +1139,25 @@ function selectIrrigationRecord(dataArray) {
   if (!Array.isArray(dataArray) || dataArray.length === 0) return null;
 
   const { date, time } = globalFilter;
-
+  
+  // Se não há filtro de data/hora, mostrar o último registro de HOJE
   if (!date && !time) {
+    const today = new Date().toISOString().split('T')[0];
+    const todayRecords = dataArray.filter(d => d.Data === today);
+    
+    if (todayRecords.length > 0) {
+      // Retornar o último registro de hoje
+      const todayWithMinutes = todayRecords
+        .map(d => ({
+          obj: d,
+          minutes: timeToMinutes(d.Horario) || 0
+        }))
+        .sort((a, b) => b.minutes - a.minutes); // Ordena decrescente
+        
+      return todayWithMinutes[0]?.obj || dataArray[dataArray.length - 1];
+    }
+    
+    // Se não há registros hoje, retornar o último registro geral
     return dataArray[dataArray.length - 1];
   }
 
@@ -1159,32 +1176,34 @@ function selectIrrigationRecord(dataArray) {
       minutes: timeToMinutes(d.Horario),
     }))
     .filter((x) => x.minutes !== null)
-    .sort((a, b) => a.minutes - b.minutes);
+    .sort((a, b) => a.minutes - b.minutes); // Ordena crescente
 
   if (!time) {
+    // Quando há data mas não hora, mostrar o ÚLTIMO registro do dia
     if (withMinutes.length) {
-      return withMinutes[0].obj;
+      return withMinutes[withMinutes.length - 1].obj; // ← ÚLTIMO, não primeiro
     }
-    return subset[0] || dataArray[0];
+    return subset[subset.length - 1] || dataArray[dataArray.length - 1];
   }
 
   const timeFilterMin = timeToMinutes(time);
   if (timeFilterMin === null) {
     if (withMinutes.length) {
-      return withMinutes[0].obj;
+      return withMinutes[withMinutes.length - 1].obj; // Último quando hora inválida
     }
-    return subset[0] || dataArray[0];
+    return subset[subset.length - 1] || dataArray[0];
   }
 
   const afterOrEqual = withMinutes.find((x) => x.minutes >= timeFilterMin);
   if (afterOrEqual) return afterOrEqual.obj;
 
   if (withMinutes.length) {
-    return withMinutes[withMinutes.length - 1].obj;
+    return withMinutes[withMinutes.length - 1].obj; // Último se não encontrou horário igual ou posterior
   }
 
   return subset[subset.length - 1];
 }
+
 
 // ---------- HELPER SIMEPAR MAPA ----------
 
@@ -1407,9 +1426,7 @@ function renderIrrigationRBS(visualEl, dataRaw) {
   gridTopo.appendChild(
     createMetric(
       "Canteiro",
-      data.CanteiroNome
-        ? `${data.CanteiroNome} (${data.Canteiro})`
-        : data.Canteiro ?? "-",
+      data.CanteiroNome || `Canteiro ${data.Canteiro}` || "-",
       "rbs-main"
     )
   );
@@ -2172,11 +2189,10 @@ function updateHighlightFromRBS(rec) {
   const data = rec.Data || "-";
   const hora = rec.Horario || "-";
   const vol = fmtNum(rec.Volume_irrigacao, 2);
-  const canteiro = rec.CanteiroNome
-    ? `${rec.CanteiroNome} (${rec.Canteiro})`
-    : rec.Canteiro ?? "-";
+  
+  const canteiro = rec.CanteiroNome || `Canteiro ${rec.Canteiro}` || "-";
 
-  info.textContent = `${formatDateBR(data)} às ${hora} • Canteiro ${canteiro} • ${vol} mm`;
+  info.textContent = `${formatDateBR(data)} às ${hora} • ${canteiro} • ${vol} mm`;
 
   const detRoot = rec.ExplicacaoDetalhada || rec.Detalhes || {};
   const meteor = detRoot["1_Meteorologia"] || detRoot || {};
@@ -2218,15 +2234,15 @@ function updateHighlightFromRL(rec, doseFinal, estadosResumo = {}) {
 
   const data = rec.Data || "-";
   const hora = rec.Horario || "-";
-  const canteiro = rec.CanteiroNome
-    ? `${rec.CanteiroNome} (${rec.Canteiro})`
-    : rec.Canteiro ?? "-";
+  
+  const canteiro = rec.CanteiroNome || `Canteiro ${rec.Canteiro}` || "-";
+  
   const doseStr =
     typeof doseFinal === "number" && !Number.isNaN(doseFinal)
       ? doseFinal.toFixed(2) + " mm"
       : String(doseFinal ?? "—");
 
-  info.textContent = `${formatDateBR(data)} às ${hora} • Canteiro ${canteiro} • ${doseStr}`;
+  info.textContent = `${formatDateBR(data)} às ${hora} • ${canteiro} • ${doseStr}`;
 
   const det = rec.Detalhes || rec.ExplicacaoDetalhada || {};
   const etc = estadosResumo.etc ?? det.etc_mm_day ?? null;
