@@ -1700,7 +1700,7 @@ function renderIrrigationRL(visualEl, dataRaw) {
       ? doseFinal.toFixed(2) + " mm"
       : String(doseFinal ?? "-");
   gridTopo.appendChild(
-    createMetric("Dose deste slot (mm)", doseFinalStr, "rbs-main")
+    createMetric("Volume irrigação (mm)", doseFinalStr, "rbs-main")
   );
 
   if (doseTotalDia !== undefined) {
@@ -2925,4 +2925,5 @@ document.addEventListener("DOMContentLoaded", () => {
     backBtn.addEventListener("click", showLanding);
   }
 });
+
 
