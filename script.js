@@ -1337,9 +1337,9 @@ function renderIrrigationRBS(visualEl, dataRaw) {
   }
 
   const detRoot = data.ExplicacaoDetalhada || data.Detalhes || {};
-  const meteor = detRoot["1_Meteorologia"] || detRoot || {};
-  const solo = detRoot["2_Solo"] || {};
-  const deficit = detRoot["3_Deficit"] || {};
+  const meteor = detRoot["2_Meteorologia_Hoje"] || detRoot["1_Meteorologia"] || detRoot || {};
+  const solo = detRoot["3_Solo"] || detRoot["2_Solo"] || {};
+  const deficit = detRoot["4_Deficit"] || detRoot["3_Deficit"] || {};
   const modelo = detRoot["4_Modelo_Irrigacao"] || {};
 
   // ====== DATA / MAPAS AUXILIARES ======
@@ -1358,7 +1358,8 @@ function renderIrrigationRBS(visualEl, dataRaw) {
   const sime = isoDateRbs ? simeMap[isoDateRbs] : null;
 
   // ====== ETc: usar apenas o PREVISTO ======
-  const etcPrev = meteor.ETo_diario_SIMEPAR_mm ?? meteor.ETc_previsto_mm ?? detRoot.ETc_previsto ?? null;
+  // NOVO: Buscar de ETo_hoje_mm do novo formato
+  const etcPrev = meteor.ETo_hoje_mm ?? meteor.ETo_diario_SIMEPAR_mm ?? meteor.ETc_previsto_mm ?? detRoot.ETc_previsto ?? null;
 
   // ====== CHUVA REAL: Plugfield horário ACUMULADA até o horário ======
   const chuvaRealFromPlug =
@@ -1367,17 +1368,16 @@ function renderIrrigationRBS(visualEl, dataRaw) {
       : null;
 
   const chuvaRealRbs =
-    meteor.Chuva_real_mm ??
-    detRoot.Chuva_real ??
-    null;
+    meteor.Chuva_real_ate_agora_mm ?? meteor.Chuva_real_mm ?? detRoot.Chuva_real ?? null;
 
   const chuvaReal =
     chuvaRealFromPlug != null && !Number.isNaN(chuvaRealFromPlug)
       ? chuvaRealFromPlug
       : chuvaRealRbs;
 
-  // ====== CHUVA PREVISTA: Simepar diário ======
+  // ====== CHUVA PREVISTA: Simepar diário (MANTIDO COMO ANTES) ======
   const chuvaPrevRbsRaw =
+    meteor.Chuva_prevista_hoje_mm ?? // NOVO: tentar do novo formato primeiro
     meteor.Chuva_prevista_mm ??
     detRoot.Chuva_prevista ??
     meteor.Chuva_prev_mm ??
@@ -1397,16 +1397,21 @@ function renderIrrigationRBS(visualEl, dataRaw) {
     sime.rain != null &&
     !Number.isNaN(Number(sime.rain))
   ) {
+    // Fallback para Simepar (como estava antes)
     chuvaPrev = Number(sime.rain);
   }
 
-  // ====== IRN / SOLO / DÉFICIT ======
-  const irnTotal = meteor.IRN_total_mm ?? detRoot.IRN_total;
+  // ====== IRN total (mm): usar o Volume_irrigacao ======
+  const irnTotal = data.Volume_irrigacao ?? 
+                  meteor.IRN_total_mm ?? 
+                  detRoot.IRN_total ?? 
+                  0;
 
-  const laminaSolo = solo.Lamina_solo_mm ?? detRoot.Lamina_solo;
-  const comp = solo.Compensacao_aplicada_mm ?? deficit.Compensacao_aplicada_mm ?? detRoot.Compensacao_deficit;
+  // ====== IRN / SOLO / DÉFICIT ======
+  const laminaSolo = solo.Contribuicao_solo_mm ?? solo.Lamina_solo_mm ?? detRoot.Lamina_solo;
+  const comp = deficit.Compensacao_aplicada_mm ?? deficit.Compensacao_aplicada_mm ?? detRoot.Compensacao_deficit;
   const defFinal =
-    deficit.Deficit_acumulado_final_mm ?? detRoot.Deficit_acumulado;
+    deficit.Deficit_final_mm ?? deficit.Deficit_acumulado_final_mm ?? detRoot.Deficit_acumulado;
 
   const irrRestantesRaw =
     modelo.Irrigacoes_restantes_hoje ?? detRoot.Irrigacoes_restantes;
@@ -1460,6 +1465,7 @@ function renderIrrigationRBS(visualEl, dataRaw) {
   gridMeteo.className = "metric-grid";
   gridMeteo.style.marginTop = "0.6rem";
 
+  // MUDANÇA: ETo do dia (mm) do novo campo
   gridMeteo.appendChild(
     createMetric("ETo do dia (mm)", fmtNum(etcPrev, 3), "rbs-context")
   );
@@ -1470,6 +1476,7 @@ function renderIrrigationRBS(visualEl, dataRaw) {
       "rain"
     )
   );
+  // MANTIDO: Chuva prevista (mantém a lógica original)
   gridMeteo.appendChild(
     createMetric(
       "Chuva prevista (mm)",
@@ -1477,6 +1484,7 @@ function renderIrrigationRBS(visualEl, dataRaw) {
       "rain"
     )
   );
+  // MUDANÇA: IRN total (mm) do Volume_irrigacao
   gridMeteo.appendChild(
     createMetric("IRN total (mm)", fmtNum(irnTotal, 2), "rbs-context")
   );
@@ -1566,7 +1574,7 @@ function renderIrrigationRBS(visualEl, dataRaw) {
       `A estratégia RBS sugeriu irrigar ${fmtNum(
         data.Volume_irrigacao,
         2
-      )} mm porque, neste dia, a cultura apresentou ETc previsto de ${etcPrevStr} mm, ` +
+      )} mm porque, neste dia, a cultura apresentou ETo do dia de ${etcPrevStr} mm, ` +
       `chuva real acumulada de ${chuvaRealStr} mm (a partir dos dados horários do Plugfield) ` +
       `e chuva prevista de ${chuvaPrevStr} mm (Simepar), além de IRN total de ${irnStr} mm. ` +
       `Com lâmina de solo de ${laminaStr} mm, compensação aplicada de ${compStr} mm ` +
@@ -1574,7 +1582,7 @@ function renderIrrigationRBS(visualEl, dataRaw) {
       `e chegou a esse volume específico para este horário, respeitando os limites diários da fase da cultura.`;
   } else {
     justText.textContent =
-      `Não foi aplicada irrigação neste horário. Mesmo com ETc previsto de ${etcPrevStr} mm, ` +
+      `Não foi aplicada irrigação neste horário. Mesmo com ETo do dia de ${etcPrevStr} mm, ` +
       `chuva real acumulada de ${chuvaRealStr} mm (Plugfield) e chuva prevista de ${chuvaPrevStr} mm (Simepar), ` +
       `além de IRN total de ${irnStr} mm, a combinação entre a lâmina de solo de ${laminaStr} mm, ` +
       `eventuais compensações de ${compStr} mm e o déficit acumulado final de ${defStr} mm ` +
@@ -1596,7 +1604,6 @@ function renderIrrigationRBS(visualEl, dataRaw) {
   updateHighlightFromRBS(data);
   saveLastDecision("rbs", data);
 }
-
 // ---------- IRRIGAÇÃO RL ----------
 
 function renderIrrigationRL(visualEl, dataRaw) {
