@@ -191,12 +191,107 @@ function normalizeToIsoDateString(raw) {
   return null;
 }
 
+function extractIrrigationDataFromNewFormat(dataArray, irrigationType) {
+  if (!Array.isArray(dataArray)) return [];
+  
+  return dataArray.map(item => {
+    if (!item || !item.data) return null;
+    
+    const data = item.data;
+    
+    if (irrigationType === 'rbs') {
+      return {
+        Data: data.Data,
+        Horario: data.Horario ? data.Horario.split(':').slice(0, 2).join(':') : "00:00",
+        HorarioOriginal: data.Horario,
+        Canteiro: data.Canteiro,
+        CanteiroNome: `Canteiro ${data.Canteiro}`,
+        Volume_irrigacao: data.Volume_irrigacao,
+        Tipo: data.Tipo,
+        ExplicacaoDetalhada: data.ExplicacaoDetalhada || {},
+        timestamp: item.timestamp,
+        HorarioPublicacao: data.HorarioPublicacao
+      };
+    } else if (irrigationType === 'rl') {
+      return {
+        Data: data.Data,
+        Horario: data.Horario ? data.Horario.split(':').slice(0, 2).join(':') : "00:00",
+        HorarioOriginal: data.Horario,
+        Canteiro: data.Canteiro,
+        CanteiroNome: `Canteiro ${data.Canteiro}`,
+        Volume_irrigacao: data.Volume_irrigacao,
+        Tipo: data.Tipo,
+        Detalhes: data.Detalhes || {},
+        timestamp: item.timestamp,
+        HorarioPublicacao: data.HorarioPublicacao,
+        Meta: data.Meta || {}
+      };
+    }
+    
+    return null;
+  }).filter(item => item !== null);
+}
 // ===============================
 // HELPERS PARA HISTORY NO S3
 // ===============================
 
+// ===============================
+// FUNÇÃO PARA BUSCAR HISTÓRICO DE IRRIGAÇÃO
+// ===============================
+
+async function fetchIrrigationHistory(irrigationType, isoDate) {
+  if (!isoDate) return null;
+  
+  // Mapeamento de tipos
+  const typeMap = {
+    'rbs': 'irrigationRBS_schedule',
+    'rl': 'irrigationRL_schedule'
+  };
+  
+  const folder = typeMap[irrigationType];
+  if (!folder) return null;
+  
+  const [y, m, d] = isoDate.split("-");
+  if (y.length !== 4) return null;
+  
+  const fileName = `${y}${m}${d}.json`;
+  const url = `https://raspbpibucket.s3.us-east-1.amazonaws.com/Irrigacoes_Decisoes/${folder}/acumulado/${fileName}?t=${Date.now()}`;
+  
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      console.warn(`Histórico não encontrado para ${irrigationType} em ${isoDate}: HTTP ${resp.status}`);
+      return null;
+    }
+    const data = await resp.json();
+    
+    // Extrai os dados da nova estrutura
+    if (irrigationType === 'rbs') {
+      return extractIrrigationDataFromNewFormat(data, 'rbs');
+    } else if (irrigationType === 'rl') {
+      return extractIrrigationDataFromNewFormat(data, 'rl');
+    }
+    
+    return data;
+  } catch (e) {
+    console.error("Erro ao buscar histórico de irrigação:", e);
+    return null;
+  }
+}
 function getHistoryKeyFromConfig(config) {
   try {
+    // Para mapear os tópicos para os novos caminhos
+    const topicMap = {
+      "irrigationRBS/schedule": "irrigationRBS_schedule",
+      "irrigationRL/schedule": "irrigationRL_schedule"
+    };
+    
+    // Se for um dos tópicos de irrigação, retorna a chave mapeada
+    if (topicMap[config.topic]) {
+      return topicMap[config.topic];
+    }
+    
+    // Para outros tópicos, mantém a lógica original
     const parts = config.url.split("/");
     const file = parts[parts.length - 1] || "";
     return file.replace(/\.json$/i, "");
@@ -228,32 +323,65 @@ async function fetchHistoryJsonForDate(config, isoDate) {
   const historyKey = getHistoryKeyFromConfig(config);
   if (!historyKey) return null;
 
-  const bucketRoot = getBucketRootFromConfig(config);
-  const parts = isoDate.split("-");
-  if (parts.length !== 3) return null;
-
-  const [y, m, d] = parts;
-  const year = y.padStart(4, "0");
-  const month = m.padStart(2, "0");
-  const day = d.padStart(2, "0");
-  const fileName = `${year}${month}${day}.json`;
-
-  const url = `${bucketRoot}/history/${historyKey}/${year}/${month}/${day}/${fileName}?t=${Date.now()}`;
-
-  try {
-    const resp = await fetch(url);
-    if (!resp.ok) {
-      console.warn(`Histórico não encontrado para ${config.topic} em ${isoDate}: HTTP ${resp.status}`);
+  // Para os tópicos de irrigação, usa o novo padrão
+  if (config.topic === "irrigationRBS/schedule" || config.topic === "irrigationRL/schedule") {
+    // Novo padrão: Irrigacoes_Decisoes/{historyKey}/acumulado/YYYYMMDD.json
+    const [y, m, d] = isoDate.split("-");
+    if (y.length !== 4) return null;
+    
+    const fileName = `${y}${m}${d}.json`;
+    
+    // URL no novo padrão
+    const url = `https://raspbpibucket.s3.us-east-1.amazonaws.com/Irrigacoes_Decisoes/${historyKey}/acumulado/${fileName}?t=${Date.now()}`;
+    
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        console.warn(`Histórico não encontrado para ${config.topic} em ${isoDate}: HTTP ${resp.status}`);
+        return null;
+      }
+      const data = await resp.json();
+      
+      // Extrai os dados da nova estrutura
+      if (config.topic === "irrigationRBS/schedule") {
+        return extractIrrigationDataFromNewFormat(data, 'rbs');
+      } else if (config.topic === "irrigationRL/schedule") {
+        return extractIrrigationDataFromNewFormat(data, 'rl');
+      }
+      
+      return data;
+    } catch (e) {
+      console.error("Erro ao buscar histórico no S3 (novo padrão):", e);
       return null;
     }
-    const data = await resp.json();
-    return data;
-  } catch (e) {
-    console.error("Erro ao buscar histórico no S3:", e);
-    return null;
+  } else {
+    // Para outros tópicos, mantém a lógica original
+    const bucketRoot = getBucketRootFromConfig(config);
+    const parts = isoDate.split("-");
+    if (parts.length !== 3) return null;
+
+    const [y, m, d] = parts;
+    const year = y.padStart(4, "0");
+    const month = m.padStart(2, "0");
+    const day = d.padStart(2, "0");
+    const fileName = `${year}${month}${day}.json`;
+
+    const url = `${bucketRoot}/history/${historyKey}/${year}/${month}/${day}/${fileName}?t=${Date.now()}`;
+
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        console.warn(`Histórico não encontrado para ${config.topic} em ${isoDate}: HTTP ${resp.status}`);
+        return null;
+      }
+      const data = await resp.json();
+      return data;
+    } catch (e) {
+      console.error("Erro ao buscar histórico no S3 (padrão antigo):", e);
+      return null;
+    }
   }
 }
-
 // ===============================
 // PLANTIOS (EXTRAÍDOS DE cultures/get)
 // ===============================
@@ -378,6 +506,10 @@ function syncPlantingFiltersFromDashboard() {
 // CARREGAMENTO DE DADOS HISTÓRICOS
 // ===============================
 
+// ===============================
+// CARREGAMENTO DE DADOS HISTÓRICOS
+// ===============================
+
 async function loadCompleteHistoricalData() {
   console.log("🚀 Carregando dados históricos COMPLETOS...");
 
@@ -397,56 +529,61 @@ async function loadCompleteHistoricalData() {
 
   console.log(`📅 Buscando dados para ${dates.length} datas`);
 
-  const rbsConfig = TOPICS.find((t) => t.topic === "irrigationRBS/schedule");
-  const rlConfig = TOPICS.find((t) => t.topic === "irrigationRL/schedule");
-
-  if (rbsConfig) {
-    console.log("📥 Carregando dados históricos RBS...");
-    for (const date of dates) {
-      try {
-        const data = await fetchHistoryJsonForDate(rbsConfig, date);
-        if (data && Array.isArray(data)) {
-          data.forEach((newItem) => {
-            const exists = historicalData.irrigationRBS.some(
-              (existingItem) =>
-                existingItem.Data === newItem.Data &&
-                existingItem.Horario === newItem.Horario &&
-                existingItem.Canteiro === newItem.Canteiro
-            );
-            if (!exists) {
-              historicalData.irrigationRBS.push(newItem);
-            }
-          });
-          console.log(`✓ RBS - ${date}: ${data.length} registros`);
-        }
-      } catch (error) {
-        console.warn(`Erro ao carregar RBS para ${date}:`, error);
+  // Buscar dados RBS
+  console.log("📥 Carregando dados históricos RBS...");
+  for (const date of dates) {
+    try {
+      // Usando a função já existente
+      const data = await fetchHistoryJsonForDate(
+        TOPICS.find(t => t.topic === "irrigationRBS/schedule"), 
+        date
+      );
+      
+      if (data && Array.isArray(data)) {
+        data.forEach((newItem) => {
+          const exists = historicalData.irrigationRBS.some(
+            (existingItem) =>
+              existingItem.Data === newItem.Data &&
+              existingItem.Horario === newItem.Horario &&
+              existingItem.Canteiro === newItem.Canteiro
+          );
+          if (!exists) {
+            historicalData.irrigationRBS.push(newItem);
+          }
+        });
+        console.log(`✓ RBS - ${date}: ${data.length} registros`);
       }
+    } catch (error) {
+      console.warn(`Erro ao carregar RBS para ${date}:`, error);
     }
   }
 
-  if (rlConfig) {
-    console.log("📥 Carregando dados históricos RL...");
-    for (const date of dates) {
-      try {
-        const data = await fetchHistoryJsonForDate(rlConfig, date);
-        if (data && Array.isArray(data)) {
-          data.forEach((newItem) => {
-            const exists = historicalData.irrigationRL.some(
-              (existingItem) =>
-                existingItem.Data === newItem.Data &&
-                existingItem.Horario === newItem.Horario &&
-                existingItem.Canteiro === newItem.Canteiro
-            );
-            if (!exists) {
-              historicalData.irrigationRL.push(newItem);
-            }
-          });
-          console.log(`✓ RL - ${date}: ${data.length} registros`);
-        }
-      } catch (error) {
-        console.warn(`Erro ao carregar RL para ${date}:`, error);
+  // Buscar dados RL
+  console.log("📥 Carregando dados históricos RL...");
+  for (const date of dates) {
+    try {
+      // Usando a função já existente
+      const data = await fetchHistoryJsonForDate(
+        TOPICS.find(t => t.topic === "irrigationRL/schedule"), 
+        date
+      );
+      
+      if (data && Array.isArray(data)) {
+        data.forEach((newItem) => {
+          const exists = historicalData.irrigationRL.some(
+            (existingItem) =>
+              existingItem.Data === newItem.Data &&
+              existingItem.Horario === newItem.Horario &&
+              existingItem.Canteiro === newItem.Canteiro
+          );
+          if (!exists) {
+            historicalData.irrigationRL.push(newItem);
+          }
+        });
+        console.log(`✓ RL - ${date}: ${data.length} registros`);
       }
+    } catch (error) {
+      console.warn(`Erro ao carregar RL para ${date}:`, error);
     }
   }
 
@@ -459,10 +596,61 @@ async function loadCompleteHistoricalData() {
 
   applyHistoryFilters();
 }
-
 // ===============================
 // LANDING / NAVEGAÇÃO
 // ===============================
+
+// ===============================
+// ADICIONAR BOTÃO DE RECARREGAMENTO (se ainda não tiver)
+// ===============================
+
+function addReloadHistoryButton() {
+  const historyHeader = document.querySelector(".history-header");
+  if (!historyHeader) return;
+
+  // Verificar se o botão já existe
+  if (document.getElementById("reloadHistoryBtn")) return;
+
+  const reloadButton = document.createElement("button");
+  reloadButton.id = "reloadHistoryBtn";
+  reloadButton.type = "button";
+  reloadButton.textContent = "🔄 Recarregar Dados Históricos";
+  reloadButton.style.marginTop = "1rem";
+  reloadButton.style.padding = "0.5rem 1rem";
+  reloadButton.style.borderRadius = "999px";
+  reloadButton.style.border = "none";
+  reloadButton.style.background = "linear-gradient(135deg, #3b82f6, #10b981)";
+  reloadButton.style.color = "#ffffff";
+  reloadButton.style.fontWeight = "600";
+  reloadButton.style.cursor = "pointer";
+  reloadButton.style.transition = "all 0.15s ease";
+
+  reloadButton.addEventListener("click", () => {
+    reloadButton.textContent = "⏳ Carregando...";
+    reloadButton.disabled = true;
+
+    loadCompleteHistoricalData().finally(() => {
+      reloadButton.textContent = "🔄 Recarregar Dados Históricos";
+      reloadButton.disabled = false;
+    });
+  });
+
+  reloadButton.addEventListener("mouseenter", () => {
+    if (!reloadButton.disabled) {
+      reloadButton.style.transform = "translateY(-1px)";
+      reloadButton.style.boxShadow = "0 8px 20px rgba(56, 189, 248, 0.4)";
+    }
+  });
+
+  reloadButton.addEventListener("mouseleave", () => {
+    if (!reloadButton.disabled) {
+      reloadButton.style.transform = "translateY(0)";
+      reloadButton.style.boxShadow = "none";
+    }
+  });
+
+  historyHeader.appendChild(reloadButton);
+}
 
 function showDashboard() {
   const landing = document.getElementById("landing");
@@ -1312,16 +1500,22 @@ function getPlugfieldDailyRainUntil(isoDate, timeStr) {
 
 // ---------- IRRIGAÇÃO RBS ----------
 
+// ---------- IRRIGAÇÃO RBS ----------
+
 function renderIrrigationRBS(visualEl, dataRaw) {
   visualEl.innerHTML = "";
 
-  let array = Array.isArray(dataRaw)
-    ? dataRaw
-    : Array.isArray(dataRaw?.data)
-    ? dataRaw.data
-    : [];
+  // Se os dados estão no novo formato, extrai
+  let array = [];
+  if (Array.isArray(dataRaw) && dataRaw.length > 0 && dataRaw[0].data) {
+    // Novo formato: extrai dados
+    array = extractIrrigationDataFromNewFormat(dataRaw, 'rbs');
+  } else {
+    // Formato antigo
+    array = Array.isArray(dataRaw) ? dataRaw : Array.isArray(dataRaw?.data) ? dataRaw.data : [];
+  }
 
-  if (!array.length && dataRaw && typeof dataRaw === "object") {
+  if (!array.length && dataRaw && typeof dataRaw === "object" && !dataRaw.data) {
     array = [dataRaw];
   }
 
@@ -1337,84 +1531,54 @@ function renderIrrigationRBS(visualEl, dataRaw) {
   }
 
   const detRoot = data.ExplicacaoDetalhada || data.Detalhes || {};
-  const meteor = detRoot["2_Meteorologia_Hoje"] || detRoot["1_Meteorologia"] || detRoot || {};
-  const solo = detRoot["3_Solo"] || detRoot["2_Solo"] || {};
-  const deficit = detRoot["4_Deficit"] || detRoot["3_Deficit"] || {};
+  const meteor = detRoot["1_Meteorologia"] || detRoot || {};
+  const solo = detRoot["2_Solo"] || {};
+  const deficit = detRoot["3_Deficit"] || {};
   const modelo = detRoot["4_Modelo_Irrigacao"] || {};
+  const cultura = detRoot["5_Cultura_e_Fase"] || {};
+  const status = detRoot["6_StatusCalculo"] || {};
 
-  // ====== DATA / MAPAS AUXILIARES ======
-  const simeMap = buildSimeparDailyMap();
+  // ====== DADOS METEOROLÓGICOS ======
+  const etcPrev = meteor.ETc_previsto_mm ?? null;
+  const etcReal = meteor.ETc_real_mm ?? null;
+  const etoSimepar = meteor.ETo_diario_SIMEPAR_mm ?? null;
+  const etoPlugfield = meteor.ETo_estimado_Plugfield_mm ?? null;
+  const chuvaReal = meteor.Chuva_real_mm ?? 0;
+  const chuvaPrev = meteor.Chuva_prevista_mm ?? 0;
+  const chuvaSimepar = meteor.Chuva_dia_SIMEPAR_mm ?? 0;
+  const irnTotal = meteor.IRN_total_mm ?? 0;
+  const peReal = meteor.Pe_real_mm ?? 0;
+  const pePrev = meteor.Pe_prevista_mm ?? 0;
+  const fracaoDiaRealizado = meteor.Fracao_dia_realizado ?? 0;
 
-  const rawDateRbs = data.Data || data.Date || data.data || null;
-  let isoDateRbs = null;
+  // ====== DADOS DO SOLO ======
+  const umidadeSensor = solo.Umidade_sensor_ ?? solo.Umidade_sensor_pct ?? 0;
+  const faixaDesejada = solo.Faixa_desejada_ ?? "40.0–50.0";
+  const laminaSolo = solo.Lamina_solo_mm ?? 0;
+  const profundidadeZ = solo.Profundidade_Z_cm ?? 20;
 
-  if (rawDateRbs) {
-    const dateOnlyRbs = String(rawDateRbs).split(" ")[0];
-    isoDateRbs = dateOnlyRbs.includes("/")
-      ? dateBRToISO(dateOnlyRbs)
-      : dateOnlyRbs;
-  }
+  // ====== DÉFICIT ======
+  const deficitDia = deficit.Deficit_do_dia_mm ?? 0;
+  const deficitAcumulado = deficit.Deficit_acumulado_final_mm ?? 0;
 
-  const sime = isoDateRbs ? simeMap[isoDateRbs] : null;
+  // ====== MODELO DE IRRIGAÇÃO ======
+  const itnTeorico = modelo.ITN_teorico_mm ?? 0;
+  const itnAjustado = modelo.ITN_ajustado_mm ?? 0;
+  const itnFinal = modelo.ITN_final_mm ?? 0;
+  const volumePorIrrigacao = modelo.Volume_por_irrigacao_mm ?? 0;
 
-  // ====== ETc: usar apenas o PREVISTO ======
-  // NOVO: Buscar de ETo_hoje_mm do novo formato
-  const etcPrev = meteor.ETo_hoje_mm ?? meteor.ETo_diario_SIMEPAR_mm ?? meteor.ETc_previsto_mm ?? detRoot.ETc_previsto ?? null;
+  // ====== CULTURA E FASE ======
+  const faseAtual = cultura.Fase_atual ?? "Não identificada";
+  const kcUtilizado = cultura.kc_utilizado ?? 1.0;
+  const profundidadeRaiz = cultura.Profundidade_raiz_Z_cm ?? 20;
+  const maxIrrigacoesDia = cultura.Max_irrigacoes_dia ?? 2;
+  const maxVolumeDiario = cultura.Max_volume_diario_mm ?? 10.0;
 
-  // ====== CHUVA REAL: Plugfield horário ACUMULADA até o horário ======
-  const chuvaRealFromPlug =
-    isoDateRbs && data.Horario
-      ? getPlugfieldDailyRainUntil(isoDateRbs, data.Horario)
-      : null;
-
-  const chuvaRealRbs =
-    meteor.Chuva_real_ate_agora_mm ?? meteor.Chuva_real_mm ?? detRoot.Chuva_real ?? null;
-
-  const chuvaReal =
-    chuvaRealFromPlug != null && !Number.isNaN(chuvaRealFromPlug)
-      ? chuvaRealFromPlug
-      : chuvaRealRbs;
-
-  // ====== CHUVA PREVISTA: Simepar diário (MANTIDO COMO ANTES) ======
-  const chuvaPrevRbsRaw =
-    meteor.Chuva_prevista_hoje_mm ?? // NOVO: tentar do novo formato primeiro
-    meteor.Chuva_prevista_mm ??
-    detRoot.Chuva_prevista ??
-    meteor.Chuva_prev_mm ??
-    detRoot.Chuva_prev_mm ??
-    null;
-
-  let chuvaPrev = null;
-
-  if (
-    chuvaPrevRbsRaw !== null &&
-    chuvaPrevRbsRaw !== undefined &&
-    !Number.isNaN(Number(chuvaPrevRbsRaw))
-  ) {
-    chuvaPrev = Number(chuvaPrevRbsRaw);
-  } else if (
-    sime &&
-    sime.rain != null &&
-    !Number.isNaN(Number(sime.rain))
-  ) {
-    // Fallback para Simepar (como estava antes)
-    chuvaPrev = Number(sime.rain);
-  }
-
-  // ====== IRN total (mm): usar o Volume_irrigacao ======
-  const irnTotal = data.Volume_irrigacao ?? 
-                  meteor.IRN_total_mm ?? 
-                  detRoot.IRN_total ?? 
-                  0;
-
-  // ====== IRN / SOLO / DÉFICIT ======
-  const laminaSolo = solo.Contribuicao_solo_mm ?? solo.Lamina_solo_mm ?? detRoot.Lamina_solo;
-  const comp = deficit.Compensacao_aplicada_mm ?? deficit.Compensacao_aplicada_mm ?? detRoot.Compensacao_deficit;
-  const defFinal =
-    deficit.Deficit_final_mm ?? deficit.Deficit_acumulado_final_mm ?? detRoot.Deficit_acumulado;
-
-  const irrRestantesRaw =
-    modelo.Irrigacoes_restantes_hoje ?? detRoot.Irrigacoes_restantes;
+  // ====== STATUS DO CÁLCULO ======
+  const modo = status.modo ?? "DESCONHECIDO";
+  const dadosSuficientes = status.dados_suficientes ?? false;
+  const horaIrrigacao = status.hora_irrigacao ?? 10;
+  const ajusteNoturno = status.ajuste_noturno ?? false;
 
   // =========================
   // TOPO DO CARD
@@ -1443,50 +1607,47 @@ function renderIrrigationRBS(visualEl, dataRaw) {
     )
   );
 
-  const tipoEstrat =
-    data.Tipo === "adaptativa_com_deficit" || !data.Tipo
-      ? "Adaptativa com déficit"
-      : data.Tipo;
   gridTopo.appendChild(
-    createMetric("Tipo de estratégia", tipoEstrat, "rbs-main")
+    createMetric("Tipo de estratégia", data.Tipo || "adaptativa_hibrida_deficit", "rbs-main")
   );
 
-  const motivoBase = document.createElement("p");
-  motivoBase.style.marginTop = "0.5rem";
-  motivoBase.style.fontSize = "0.8rem";
-  motivoBase.style.color = "#9ca3af";
-  motivoBase.textContent =
-    "Decisão baseada no balanço hídrico diário (ETc previsto, chuva real acumulada, umidade do solo, lâmina de solo e déficit acumulado).";
-
   // =========================
-  // BLOCO METEOROLOGIA (sem ETc real!)
+  // BLOCO METEOROLOGIA
   // =========================
   const gridMeteo = document.createElement("div");
   gridMeteo.className = "metric-grid";
   gridMeteo.style.marginTop = "0.6rem";
 
-  // MUDANÇA: ETo do dia (mm) do novo campo
   gridMeteo.appendChild(
-    createMetric("ETo do dia (mm)", fmtNum(etcPrev, 3), "rbs-context")
+    createMetric("ETo Simepar (mm)", fmtNum(etoSimepar, 3), "eto")
   );
+  
+  if (etoPlugfield > 0) {
+    gridMeteo.appendChild(
+      createMetric("ETo Plugfield (mm)", fmtNum(etoPlugfield, 3), "eto")
+    );
+  }
+  
   gridMeteo.appendChild(
-    createMetric(
-      "Chuva real (mm)",
-      fmtNum(chuvaReal, 2),
-      "rain"
-    )
+    createMetric("ETc previsto (mm)", fmtNum(etcPrev, 3), "rbs-context")
   );
-  // MANTIDO: Chuva prevista (mantém a lógica original)
+  
+  if (etcReal > 0) {
+    gridMeteo.appendChild(
+      createMetric("ETc realizado (mm)", fmtNum(etcReal, 3), "rbs-context")
+    );
+  }
+  
   gridMeteo.appendChild(
-    createMetric(
-      "Chuva prevista (mm)",
-      fmtNum(chuvaPrev, 2),
-      "rain"
-    )
+    createMetric("Chuva real (mm)", fmtNum(chuvaReal, 2), "rain")
   );
-  // MUDANÇA: IRN total (mm) do Volume_irrigacao
+  
   gridMeteo.appendChild(
-    createMetric("IRN total (mm)", fmtNum(irnTotal, 2), "rbs-context")
+    createMetric("Chuva prevista (mm)", fmtNum(chuvaPrev, 2), "rain")
+  );
+  
+  gridMeteo.appendChild(
+    createMetric("Chuva Simepar (mm)", fmtNum(chuvaSimepar, 2), "rain")
   );
 
   // =========================
@@ -1496,51 +1657,88 @@ function renderIrrigationRBS(visualEl, dataRaw) {
   gridSoloDef.className = "metric-grid";
   gridSoloDef.style.marginTop = "0.6rem";
 
-  gridSoloDef.appendChild(
-    createMetric("Lâmina de solo (mm)", fmtNum(laminaSolo, 2), "rbs-soil")
-  );
-
-  const hasComp =
-    comp !== undefined &&
-    comp !== null &&
-    !Number.isNaN(Number(comp));
-
-  if (hasComp) {
+  if (umidadeSensor > 0) {
     gridSoloDef.appendChild(
-      createMetric(
-        "Compensação aplicada (mm)",
-        fmtNum(Number(comp), 3),
-        "rbs-soil"
-      )
+      createMetric("Umidade solo sensor (%)", fmtNum(umidadeSensor, 1), "rbs-soil")
     );
   }
 
   gridSoloDef.appendChild(
-    createMetric(
-      "Déficit acumulado final (mm)",
-      fmtNum(defFinal, 3),
-      "rbs-soil"
-    )
+    createMetric("Faixa desejada (%)", faixaDesejada, "rbs-soil")
   );
 
-  const hasIrrRestantes =
-    irrRestantesRaw !== undefined &&
-    irrRestantesRaw !== null &&
-    irrRestantesRaw !== "" &&
-    irrRestantesRaw !== "—";
+  gridSoloDef.appendChild(
+    createMetric("Lâmina solo (mm)", fmtNum(laminaSolo, 2), "rbs-soil")
+  );
 
-  if (hasIrrRestantes) {
-    gridSoloDef.appendChild(
-      createMetric(
-        "Irrigações restantes hoje",
-        irrRestantesRaw,
-        "rbs-context"
-      )
-    );
-  }
+  gridSoloDef.appendChild(
+    createMetric("Profundidade Z (cm)", profundidadeZ, "rbs-soil")
+  );
+
+  gridSoloDef.appendChild(
+    createMetric("Déficit do dia (mm)", fmtNum(deficitDia, 3), "rbs-soil")
+  );
+
+  gridSoloDef.appendChild(
+    createMetric("Déficit acumulado (mm)", fmtNum(deficitAcumulado, 3), "rbs-soil")
+  );
 
   // =========================
-  // CAIXA "POR QUE IRRIGAR..."
+  // MODELO DE IRRIGAÇÃO
+  // =========================
+  const gridModelo = document.createElement("div");
+  gridModelo.className = "metric-grid";
+  gridModelo.style.marginTop = "0.6rem";
+
+  gridModelo.appendChild(
+    createMetric("ITN teórico (mm)", fmtNum(itnTeorico, 3), "rbs-context")
+  );
+
+  gridModelo.appendChild(
+    createMetric("ITN ajustado (mm)", fmtNum(itnAjustado, 3), "rbs-context")
+  );
+
+  gridModelo.appendChild(
+    createMetric("ITN final (mm)", fmtNum(itnFinal, 3), "rbs-context")
+  );
+
+  gridModelo.appendChild(
+    createMetric("IRN total (mm)", fmtNum(irnTotal, 3), "rbs-context")
+  );
+
+  gridModelo.appendChild(
+    createMetric("Volume por irrigação (mm)", fmtNum(volumePorIrrigacao, 2), "rbs-context")
+  );
+
+  // =========================
+  // CULTURA E FASE
+  // =========================
+  const gridCultura = document.createElement("div");
+  gridCultura.className = "metric-grid";
+  gridCultura.style.marginTop = "0.6rem";
+
+  gridCultura.appendChild(
+    createMetric("Fase atual", faseAtual, "rbs-context")
+  );
+
+  gridCultura.appendChild(
+    createMetric("Kc utilizado", fmtNum(kcUtilizado, 2), "rbs-context")
+  );
+
+  gridCultura.appendChild(
+    createMetric("Profundidade raiz (cm)", profundidadeRaiz, "rbs-context")
+  );
+
+  gridCultura.appendChild(
+    createMetric("Máx irrigações/dia", maxIrrigacoesDia, "rbs-context")
+  );
+
+  gridCultura.appendChild(
+    createMetric("Máx volume diário (mm)", fmtNum(maxVolumeDiario, 1), "rbs-context")
+  );
+
+  // =========================
+  // CAIXA "POR QUE IRRIGAR..." (VERSÃO ORIGINAL)
   // =========================
   const justBox = document.createElement("div");
   justBox.className = "rbs-justification-box";
@@ -1561,32 +1759,47 @@ function renderIrrigationRBS(visualEl, dataRaw) {
   justText.style.margin = "0";
   justText.style.lineHeight = "1.5";
 
+  // Informações para a explicação
   const etcPrevStr = fmtNum(etcPrev, 2);
+  const etcRealStr = fmtNum(etcReal, 2);
+  const etoSimeparStr = fmtNum(etoSimepar, 3);
   const chuvaRealStr = fmtNum(chuvaReal, 2);
   const chuvaPrevStr = fmtNum(chuvaPrev, 2);
-  const irnStr = fmtNum(irnTotal, 2);
-  const laminaStr = fmtNum(laminaSolo, 2);
-  const compStr = hasComp ? fmtNum(Number(comp), 2) : "0.00";
-  const defStr = fmtNum(defFinal, 2);
+  const chuvaSimeparStr = fmtNum(chuvaSimepar, 2);
+  const irnTotalStr = fmtNum(irnTotal, 2);
+  const laminaSoloStr = fmtNum(laminaSolo, 2);
+  const deficitDiaStr = fmtNum(deficitDia, 3);
+  const deficitAcumuladoStr = fmtNum(deficitAcumulado, 3);
+  const volumePorIrrigacaoStr = fmtNum(volumePorIrrigacao, 2);
+  const itnFinalStr = fmtNum(itnFinal, 2);
+  const faseAtualStr = faseAtual;
+  const kcUtilizadoStr = fmtNum(kcUtilizado, 2);
+  const maxIrrigacoesDiaStr = maxIrrigacoesDia;
+  const maxVolumeDiarioStr = fmtNum(maxVolumeDiario, 1);
+  const fracaoDiaStr = fmtNum(fracaoDiaRealizado * 100, 1);
 
   if (data.Volume_irrigacao > 0) {
     justText.textContent =
-      `A estratégia RBS sugeriu irrigar ${fmtNum(
-        data.Volume_irrigacao,
-        2
-      )} mm porque, neste dia, a cultura apresentou ETo do dia de ${etcPrevStr} mm, ` +
-      `chuva real acumulada de ${chuvaRealStr} mm (a partir dos dados horários do Plugfield) ` +
-      `e chuva prevista de ${chuvaPrevStr} mm (Simepar), além de IRN total de ${irnStr} mm. ` +
-      `Com lâmina de solo de ${laminaStr} mm, compensação aplicada de ${compStr} mm ` +
-      `e déficit acumulado final de ${defStr} mm, o modelo dividiu a reposição hídrica ao longo do dia ` +
-      `e chegou a esse volume específico para este horário, respeitando os limites diários da fase da cultura.`;
+      `A estratégia RBS sugeriu irrigar ${fmtNum(data.Volume_irrigacao, 2)} mm ` +
+      `porque, até este horário (${fracaoDiaStr}% do dia realizado), ` +
+      `a cultura (${faseAtualStr}, Kc=${kcUtilizadoStr}) apresentou ETc previsto de ${etcPrevStr} mm ` +
+      `e ETc realizado de ${etcRealStr} mm (baseado em ETo Simepar de ${etoSimeparStr} mm). ` +
+      `Com chuva real acumulada de ${chuvaRealStr} mm e chuva prevista de ${chuvaPrevStr} mm (Simepar: ${chuvaSimeparStr} mm), ` +
+      `além de IRN total de ${irnTotalStr} mm, lâmina de solo de ${laminaSoloStr} mm, ` +
+      `déficit do dia de ${deficitDiaStr} mm e déficit acumulado de ${deficitAcumuladoStr} mm, ` +
+      `o modelo calculou um ITN final de ${itnFinalStr} mm. ` +
+      `Considerando o limite de ${maxIrrigacoesDiaStr} irrigações/dia e ${maxVolumeDiarioStr} mm/dia máximo, ` +
+      `a reposição foi dividida em ${maxIrrigacoesDiaStr} slots de aproximadamente ${volumePorIrrigacaoStr} mm cada.`;
   } else {
     justText.textContent =
-      `Não foi aplicada irrigação neste horário. Mesmo com ETo do dia de ${etcPrevStr} mm, ` +
-      `chuva real acumulada de ${chuvaRealStr} mm (Plugfield) e chuva prevista de ${chuvaPrevStr} mm (Simepar), ` +
-      `além de IRN total de ${irnStr} mm, a combinação entre a lâmina de solo de ${laminaStr} mm, ` +
-      `eventuais compensações de ${compStr} mm e o déficit acumulado final de ${defStr} mm ` +
-      `indicou que não era necessário adicionar lâmina extra neste momento.`;
+      `Não foi aplicada irrigação neste horário. ` +
+      `Mesmo com ETc previsto de ${etcPrevStr} mm e realizado de ${etcRealStr} mm ` +
+      `(ETo Simepar: ${etoSimeparStr} mm), chuva real de ${chuvaRealStr} mm e prevista de ${chuvaPrevStr} mm, ` +
+      `IRN total de ${irnTotalStr} mm, lâmina de solo de ${laminaSoloStr} mm, ` +
+      `déficit do dia de ${deficitDiaStr} mm e acumulado de ${deficitAcumuladoStr} mm, ` +
+      `a combinação destes fatores indicou que não era necessário adicionar lâmina extra neste momento. ` +
+      `O modelo respeita os limites da fase ${faseAtualStr}: máximo ${maxIrrigacoesDiaStr} irrigações/dia ` +
+      `e ${maxVolumeDiarioStr} mm/dia.`;
   }
 
   justBox.appendChild(justTitle);
@@ -1596,9 +1809,10 @@ function renderIrrigationRBS(visualEl, dataRaw) {
   // MONTAGEM FINAL
   // =========================
   visualEl.appendChild(gridTopo);
-  visualEl.appendChild(motivoBase);
   visualEl.appendChild(gridMeteo);
   visualEl.appendChild(gridSoloDef);
+  visualEl.appendChild(gridModelo);
+  visualEl.appendChild(gridCultura);
   visualEl.appendChild(justBox);
 
   updateHighlightFromRBS(data);
@@ -1609,13 +1823,17 @@ function renderIrrigationRBS(visualEl, dataRaw) {
 function renderIrrigationRL(visualEl, dataRaw) {
   visualEl.innerHTML = "";
 
-  let array = Array.isArray(dataRaw)
-    ? dataRaw
-    : Array.isArray(dataRaw?.data)
-    ? dataRaw.data
-    : [];
+  // Se os dados estão no novo formato, extrai
+  let array = [];
+  if (Array.isArray(dataRaw) && dataRaw.length > 0 && dataRaw[0].data) {
+    // Novo formato: extrai dados
+    array = extractIrrigationDataFromNewFormat(dataRaw, 'rl');
+  } else {
+    // Formato antigo
+    array = Array.isArray(dataRaw) ? dataRaw : Array.isArray(dataRaw?.data) ? dataRaw.data : [];
+  }
 
-  if (!array.length && dataRaw && typeof dataRaw === "object") {
+  if (!array.length && dataRaw && typeof dataRaw === "object" && !dataRaw.data) {
     array = [dataRaw];
   }
 
@@ -1625,58 +1843,11 @@ function renderIrrigationRL(visualEl, dataRaw) {
   }
 
   const data = selectIrrigationRecord(array) || array[array.length - 1];
-
   const det = data.Detalhes || data.ExplicacaoDetalhada || {};
-  const estados = det.Estados || det.States || {};
 
-  const doseFinal =
-    data.Volume_irrigacao ??
-    det.Volume_irrigacao_mm ??
-    det.dose_slot_mm ??
-    det.dose_final_mm ??
-    data.Volume_zero ??
-    0;
-
-  const doseTotalDia = det.Dose_total_dia_mm ?? data.Dose_total_dia_mm;
-  const soilNow = det.SoilHumidity_pct ?? det.soil_h_pct;
-  const soilAfter = det.hum_after_partial_pct ?? det.hum_after_pct;
-  const humMin = det.hum_min;
-  const humMax = det.hum_max;
-
-  const tMax =
-    estados.Temp_max_dia_C ??
-    estados.TempMax ??
-    det.Temp_max_dia_C ??
-    det.TempMax ??
-    det.leituraTemperaturaMax ??
-    null;
-
-  const tMin =
-    estados.Temp_min_dia_C ??
-    estados.TempMin ??
-    det.Temp_min_dia_C ??
-    det.TempMin ??
-    det.leituraTemperaturaMin ??
-    null;
-
-  const rain =
-    estados.Rain_mm_dia ??
-    estados.Chuva_mm ??
-    det.rain_mm_day ??
-    det.Chuva_real ??
-    det.leituraPrecipitacao ??
-    null;
-
-  const etoFromStates =
-    estados.Eto_mm_dia ??
-    estados.ETo_mm ??
-    det.eto_mm_day ??
-    det.ETo ??
-    det.leituraEto ??
-    null;
-
-  const etoDiaVal = etoFromStates;
-
+  // =========================
+  // TOPO DO CARD
+  // =========================
   const gridTopo = document.createElement("div");
   gridTopo.className = "metric-grid";
 
@@ -1685,200 +1856,196 @@ function renderIrrigationRL(visualEl, dataRaw) {
   gridTopo.appendChild(
     createMetric(
       "Canteiro",
-      data.CanteiroNome
-        ? `${data.CanteiroNome} (${data.Canteiro})`
-        : data.Canteiro ?? "-",
+      data.CanteiroNome || `Canteiro ${data.Canteiro}` || "-",
       "rbs-main"
     )
   );
   gridTopo.appendChild(
-    createMetric("Agente RL", data.Tipo || "RL-PPO", "rbs-main")
+    createMetric("Agente RL", data.Tipo || "PREVISAO-TEMPO", "rbs-main")
   );
 
-  const doseFinalStr =
-    typeof doseFinal === "number" && !Number.isNaN(doseFinal)
-      ? doseFinal.toFixed(2) + " mm"
-      : String(doseFinal ?? "-");
+  const doseFinal = data.Volume_irrigacao ?? 0;
+  const doseFinalStr = fmtNum(doseFinal, 2) + " mm";
   gridTopo.appendChild(
     createMetric("Volume irrigação (mm)", doseFinalStr, "rbs-main")
   );
 
+  const doseTotalDia = det.Dose_total_dia_mm ?? 0;
   if (doseTotalDia !== undefined) {
-    const totalDiaStr =
-      typeof doseTotalDia === "number" && !Number.isNaN(doseTotalDia)
-        ? doseTotalDia.toFixed(2) + " mm"
-        : String(doseTotalDia);
     gridTopo.appendChild(
-      createMetric("Dose total do dia (mm)", totalDiaStr, "rbs-main")
+      createMetric("Dose total do dia (mm)", fmtNum(doseTotalDia, 2), "rbs-main")
     );
   }
 
-  const motivo = document.createElement("p");
-  motivo.style.marginTop = "0.5rem";
-  motivo.style.fontSize = "0.8rem";
-  motivo.style.color = "#9ca3af";
-  motivo.textContent =
-    data.Motivo || det.reason || "Sem descrição detalhada da decisão.";
+  // =========================
+  // MOTIVO DA DECISÃO (TRADUZIDO)
+  // =========================
+  const motivoBox = document.createElement("div");
+  motivoBox.style.marginTop = "0.5rem";
+  motivoBox.style.padding = "0.75rem";
+  motivoBox.style.borderRadius = "0.5rem";
+  motivoBox.style.background = "#f3f4f6";
+  motivoBox.style.fontSize = "0.85rem";
+  motivoBox.style.color = "#4b5563";
 
-  const gridContexto = document.createElement("div");
-  gridContexto.className = "metric-grid";
-  gridContexto.style.marginTop = "0.6rem";
+  const motivoTitle = document.createElement("div");
+  motivoTitle.textContent = "Motivo da decisão";
+  motivoTitle.style.fontWeight = "600";
+  motivoTitle.style.marginBottom = "0.25rem";
 
-  if (soilNow !== undefined && soilNow !== null && !Number.isNaN(Number(soilNow))) {
-    gridContexto.appendChild(
-      createMetric("Umidade solo atual (%)", fmtNum(Number(soilNow), 2), "rbs-soil")
-    );
-  }
+  const motivoText = document.createElement("p");
+  motivoText.style.margin = "0";
 
-  if (soilAfter !== undefined && soilAfter !== null && !Number.isNaN(Number(soilAfter))) {
-    gridContexto.appendChild(
-      createMetric(
-        "Umidade estimada após slot (%)",
-        fmtNum(Number(soilAfter), 2),
-        "rbs-soil"
-      )
-    );
-  }
+  // Traduzir os valores de reason para português
+  let motivoTraduzido = "Sem motivo especificado";
+  const reason = det.reason || "";
 
-  if (humMin !== undefined && humMax !== undefined) {
-    gridContexto.appendChild(
-      createMetric(
-        "Faixa alvo de umidade (%)",
-        `${humMin} — ${humMax}`,
-        "rbs-soil"
-      )
-    );
-  }
+  const traducoes = {
+    "need_insignificant": "Necessidade de irrigação insignificante",
+    "need_positive": "Necessidade de irrigação detectada",
+    "soil_above_target": "Umidade do solo acima da faixa alvo",
+    "soil_below_target": "Umidade do solo abaixo da faixa alvo",
+    "forecast_rain": "Chuva prevista para o período",
+    "high_temperature": "Temperatura elevada prevista",
+    "frost_protection": "Proteção contra geada",
+    "max_daily_limit": "Limite diário máximo atingido",
+    "no_data": "Dados insuficientes para decisão",
+    "sensor_failure": "Falha no sensor",
+    "manual_override": "Controle manual ativado",
+    "maintenance": "Modo de manutenção"
+  };
 
-  if (
-    (det.dep_after_partial !== undefined && det.dep_after_partial !== null && !Number.isNaN(Number(det.dep_after_partial))) ||
-    (det.dep_after !== undefined && det.dep_after !== null && !Number.isNaN(Number(det.dep_after)))
-  ) {
-    const depVal = det.dep_after_partial ?? det.dep_after;
-    gridContexto.appendChild(
-      createMetric(
-        "Depleção após slot (mm)",
-        fmtNum(Number(depVal), 3),
-        "rbs-soil"
-      )
-    );
+  if (reason in traducoes) {
+    motivoTraduzido = traducoes[reason];
+  } else if (reason) {
+    // Se não estiver no dicionário, usa o valor original mas tenta melhorar
+    motivoTraduzido = reason.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   }
 
-  if (etoDiaVal !== null && etoDiaVal !== undefined && !Number.isNaN(etoDiaVal)) {
-    gridContexto.appendChild(
-      createMetric("ETo do dia (mm)", fmtNum(etoDiaVal, 3), "eto")
-    );
-  }
-  if (det.etc_mm_day !== undefined && det.etc_mm_day !== null && !Number.isNaN(det.etc_mm_day)) {
-    gridContexto.appendChild(
-      createMetric("ETc do dia (mm)", fmtNum(det.etc_mm_day, 3), "rbs-context")
-    );
-  }
-  if (
-    (det.rain_mm_day !== undefined && det.rain_mm_day !== null && !Number.isNaN(det.rain_mm_day)) ||
-    (rain !== null && rain !== undefined && !Number.isNaN(rain))
-  ) {
-    gridContexto.appendChild(
-      createMetric("Chuva do dia (mm)", fmtNum(det.rain_mm_day ?? rain, 2), "rain")
-    );
-  }
+  motivoText.textContent = motivoTraduzido;
 
-  const hasDefFinal =
-    det.need_mm_day !== undefined &&
-    det.need_mm_day !== null &&
-    !Number.isNaN(Number(det.need_mm_day));
+  motivoBox.appendChild(motivoTitle);
+  motivoBox.appendChild(motivoText);
 
-  if (hasDefFinal) {
-    gridContexto.appendChild(
-      createMetric(
-        "Déficit acumulado final (mm)",
-        fmtNum(Number(det.need_mm_day), 3),
-        "rbs-context"
-      )
-    );
-  }
+  // =========================
+  // DETALHES DO CÁLCULO
+  // =========================
+  const gridDetalhes = document.createElement("div");
+  gridDetalhes.className = "metric-grid";
+  gridDetalhes.style.marginTop = "0.6rem";
 
-  if (det.need_mm_partial !== undefined && det.need_mm_partial !== null && !Number.isNaN(det.need_mm_partial)) {
-    gridContexto.appendChild(
-      createMetric(
-        "Necessidade neste slot (mm)",
-        fmtNum(det.need_mm_partial, 3),
-        "rbs-context"
-      )
-    );
-  }
-  if (det.Slots_totais !== undefined) {
-    gridContexto.appendChild(
-      createMetric("Slots no dia", det.Slots_totais, "rbs-context")
-    );
-  }
-  if (det.Distribuicao !== undefined) {
-    gridContexto.appendChild(
-      createMetric("Distribuição dos slots", det.Distribuicao, "rbs-context")
-    );
-  }
-  if (det.MaxDaily_mm !== undefined && det.MaxDaily_mm !== null && !Number.isNaN(det.MaxDaily_mm)) {
-    gridContexto.appendChild(
-      createMetric(
-        "Volume diário máximo (mm)",
-        fmtNum(det.MaxDaily_mm, 2),
-        "rbs-context"
-      )
-    );
-  }
+  // Dados meteorológicos
+  gridDetalhes.appendChild(
+    createMetric("ETo do dia (mm)", fmtNum(det.eto_mm_day, 3), "eto")
+  );
 
-  const gridEstados = document.createElement("div");
-  gridEstados.className = "metric-grid";
-  gridEstados.style.marginTop = "0.6rem";
+  gridDetalhes.appendChild(
+    createMetric("ETc do dia (mm)", fmtNum(det.etc_mm_day, 3), "rbs-context")
+  );
 
-  const hasTmax = tMax !== null && tMax !== undefined && !Number.isNaN(tMax);
-  const hasTmin = tMin !== null && tMin !== undefined && !Number.isNaN(tMin);
-  const hasRain = rain !== null && rain !== undefined && !Number.isNaN(rain);
-  const hasEto =
-    etoDiaVal !== null && etoDiaVal !== undefined && !Number.isNaN(etoDiaVal);
+  gridDetalhes.appendChild(
+    createMetric("Chuva prevista (mm)", fmtNum(det.rain_mm_day, 2), "rain")
+  );
 
-  if (hasTmax) {
-    gridEstados.appendChild(
-      createMetric("T. máx do dia (°C)", fmtNum(tMax, 2), "temp")
-    );
-  }
-  if (hasTmin) {
-    gridEstados.appendChild(
-      createMetric("T. mín do dia (°C)", fmtNum(tMin, 2), "temp")
-    );
-  }
+  gridDetalhes.appendChild(
+    createMetric("Necessidade do dia (mm)", fmtNum(det.need_mm_day, 3), "rbs-context")
+  );
 
-  /*
-  if (hasRain) {
-    gridEstados.appendChild(
-      createMetric("Chuva do dia (mm)", fmtNum(rain, 2), "rain")
-    );
-  }
-  */
+  // Parâmetros do modelo
+  gridDetalhes.appendChild(
+    createMetric("Kc do dia", fmtNum(det.kc_today, 2), "rbs-context")
+  );
 
-  if (hasEto) {
-    gridEstados.appendChild(
-      createMetric("ETo do dia (mm)", fmtNum(etoDiaVal, 3), "eto")
-    );
-  }
+  gridDetalhes.appendChild(
+    createMetric("Slots totais", det.Slots_totais ?? "-", "rbs-context")
+  );
 
+  gridDetalhes.appendChild(
+    createMetric("Slots futuros", det.Slots_futuros ?? "-", "rbs-context")
+  );
+
+  gridDetalhes.appendChild(
+    createMetric("Distribuição", det.Distribuicao ?? "-", "rbs-context")
+  );
+
+  gridDetalhes.appendChild(
+    createMetric("Máx diário (mm)", fmtNum(det.MaxDaily_mm, 1), "rbs-context")
+  );
+
+  // =========================
+  // FONTE DOS DADOS
+  // =========================
+  const fonteBox = document.createElement("div");
+  fonteBox.style.marginTop = "0.5rem";
+  fonteBox.style.padding = "0.5rem";
+  fonteBox.style.borderRadius = "0.5rem";
+  fonteBox.style.background = "#fef3c7";
+  fonteBox.style.fontSize = "0.8rem";
+  fonteBox.style.color = "#92400e";
+  fonteBox.style.display = "flex";
+  fonteBox.style.justifyContent = "space-between";
+
+  const fonteEsq = document.createElement("div");
+  fonteEsq.innerHTML = `
+    <div style="font-weight: 600;">Fonte previsão:</div>
+    <div>${det.Fonte_previsao || "-"}</div>
+  `;
+
+  const fonteDir = document.createElement("div");
+  fonteDir.innerHTML = `
+    <div style="font-weight: 600;">Fonte irrigação:</div>
+    <div>${det.Fonte_irrigacao || "-"}</div>
+  `;
+
+  fonteBox.appendChild(fonteEsq);
+  fonteBox.appendChild(fonteDir);
+
+  // =========================
+  // METADADOS
+  // =========================
+  const metaBox = document.createElement("div");
+  metaBox.style.marginTop = "0.5rem";
+  metaBox.style.padding = "0.5rem";
+  metaBox.style.borderRadius = "0.5rem";
+  metaBox.style.background = "#f0f9ff";
+  metaBox.style.fontSize = "0.75rem";
+  metaBox.style.color = "#0369a1";
+  metaBox.style.display = "flex";
+  metaBox.style.justifyContent = "space-between";
+  metaBox.style.alignItems = "center";
+
+  const metaEsq = document.createElement("div");
+  metaEsq.innerHTML = `
+    <div><strong>Scheduler:</strong> ${data.Meta?.Scheduler || "-"}</div>
+    <div><strong>Fase:</strong> ${det.Fase || "-"}</div>
+  `;
+
+  const metaDir = document.createElement("div");
+  metaDir.style.textAlign = "right";
+  metaDir.innerHTML = `
+    <div><strong>Sensor usado:</strong> ${det.sensor_used ? "Sim" : "Não"}</div>
+    <div><strong>Baseado em previsão:</strong> ${det.forecast_based ? "Sim" : "Não"}</div>
+  `;
+
+  metaBox.appendChild(metaEsq);
+  metaBox.appendChild(metaDir);
+
+  // =========================
+  // MONTAGEM FINAL
+  // =========================
   visualEl.appendChild(gridTopo);
-  visualEl.appendChild(motivo);
-  visualEl.appendChild(gridContexto);
-  if (gridEstados.childElementCount > 0) {
-    visualEl.appendChild(gridEstados);
-  }
+  visualEl.appendChild(motivoBox);
+  visualEl.appendChild(gridDetalhes);
+  visualEl.appendChild(fonteBox);
+  visualEl.appendChild(metaBox);
 
   updateHighlightFromRL(data, doseFinal, {
-    tMax,
-    tMin,
-    rain,
-    eto: etoDiaVal,
+    eto: det.eto_mm_day,
     etc: det.etc_mm_day,
+    rain: det.rain_mm_day
   });
   saveLastDecision("rl", data);
 }
-
 // ---------- GENÉRICO ----------
 
 function renderGeneric(visualEl, data) {
@@ -2448,16 +2615,16 @@ function buildHistoryRows() {
     if (!rec || !rec.Data) return;
     const date = rec.Data;
     const time = (rec.Horario || "00:00").slice(0, 5);
-    const canteiro = rec.CanteiroNome
-      ? `${rec.CanteiroNome} (${rec.Canteiro})`
-      : rec.Canteiro ?? "-";
+    
+    // REMOVER: Mostrar apenas "Canteiro 1" sem o (1)
+    const canteiro = rec.CanteiroNome 
+      ? rec.CanteiroNome // Se tiver nome, usa apenas o nome
+      : `Canteiro ${rec.Canteiro}`; // Se não tiver nome, mostra "Canteiro X"
+    
     const volume = Number(
       rec.Volume_irrigacao ?? rec.Volume_mm ?? rec.Volume ?? 0
     );
-    const tipo =
-      rec.Tipo === "adaptativa_com_deficit" || !rec.Tipo
-        ? "Adaptativa com déficit"
-        : rec.Tipo;
+    const tipo = rec.Tipo || "RBS";
 
     const detRoot = rec.ExplicacaoDetalhada || rec.Detalhes || {};
     const meteor = detRoot["1_Meteorologia"] || detRoot || {};
@@ -2486,9 +2653,11 @@ function buildHistoryRows() {
     if (!rec || !rec.Data) return;
     const date = rec.Data;
     const time = (rec.Horario || "00:00").slice(0, 5);
-    const canteiro = rec.CanteiroNome
-      ? `${rec.CanteiroNome} (${rec.Canteiro})`
-      : rec.Canteiro ?? "-";
+    
+    // REMOVER: Mostrar apenas "Canteiro 2" sem o (2)
+    const canteiro = rec.CanteiroNome 
+      ? rec.CanteiroNome // Se tiver nome, usa apenas o nome
+      : `Canteiro ${rec.Canteiro}`; // Se não tiver nome, mostra "Canteiro X"
 
     const det = rec.Detalhes || rec.ExplicacaoDetalhada || {};
     const estados = det.Estados || det.States || {};
@@ -2501,7 +2670,7 @@ function buildHistoryRows() {
       rec.Volume_zero ??
       0;
     const volume = Number(vol);
-    const tipo = rec.Tipo || "RL-PPO";
+    const tipo = rec.Tipo || "RL";
 
     const chuvaSime = simeMap[date]?.rain ?? null;
     const chuva =
@@ -2532,7 +2701,6 @@ function buildHistoryRows() {
 
   return rows;
 }
-
 function renderHistoryTable(rows) {
   const tableBody = document.getElementById("historyTableBody");
   if (!tableBody) return;
@@ -2549,13 +2717,14 @@ function renderHistoryTable(rows) {
       tr.style.borderLeft = "4px solid #3b82f6";
     }
 
+    // REMOVER: Não mostrar mais a coluna de Tipo/Regra
     tr.innerHTML = `
       <td>${r.date ? formatDateBR(r.date) : "-"}</td>
       <td>${r.time || "--:--"}</td>
       <td>${r.method}</td>
       <td>${r.canteiro || "—"}</td>
       <td>${r.volume != null ? fmtNum(r.volume, 2) : "—"}</td>
-      <td>${r.tipo || "—"}</td>
+      <!-- Removido: <td>${r.tipo || "—"}</td> -->
     `;
     tableBody.appendChild(tr);
   });
@@ -2662,6 +2831,211 @@ function applyHistoryFilters() {
   renderHistoryTable(filtered);
   updateHistoryChart(filtered);
   renderIrrigationSummary(filtered);
+}
+
+// ===============================
+// EXPORTAÇÃO PARA EXCEL
+// ===============================
+
+function exportToExcel(rows, filename = "historico_irrigacao") {
+  if (!rows.length) {
+    alert("Não há dados para exportar.");
+    return;
+  }
+
+  // Criar cabeçalhos
+  const headers = ["Data", "Horário", "Método", "Canteiro", "Volume (mm)", "Chuva (mm)"];
+  
+  // Criar dados
+  const data = rows.map(row => [
+    row.date ? formatDateBR(row.date) : "-",
+    row.time || "--:--",
+    row.method,
+    row.canteiro || "-",
+    row.volume != null ? fmtNum(row.volume, 2) : "—",
+    row.chuva != null ? fmtNum(row.chuva, 2) : "—"
+  ]);
+
+  // Criar conteúdo CSV
+  let csvContent = "data:text/csv;charset=utf-8,";
+  
+  // Adicionar cabeçalhos
+  csvContent += headers.join(";") + "\r\n";
+  
+  // Adicionar dados
+  data.forEach(row => {
+    csvContent += row.join(";") + "\r\n";
+  });
+
+  // Criar link de download
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function addExportButton() {
+  const historyHeader = document.querySelector(".history-header");
+  if (!historyHeader) return;
+
+  // Verificar se o botão já existe
+  if (document.getElementById("exportExcelBtn")) return;
+
+  const exportButton = document.createElement("button");
+  exportButton.id = "exportExcelBtn";
+  exportButton.type = "button";
+  exportButton.textContent = "📥 Exportar para Excel";
+  exportButton.style.marginTop = "1rem";
+  exportButton.style.marginLeft = "0.5rem";
+  exportButton.style.padding = "0.5rem 1rem";
+  exportButton.style.borderRadius = "999px";
+  exportButton.style.border = "none";
+  exportButton.style.background = "linear-gradient(135deg, #10b981, #059669)";
+  exportButton.style.color = "#ffffff";
+  exportButton.style.fontWeight = "600";
+  exportButton.style.cursor = "pointer";
+  exportButton.style.transition = "all 0.15s ease";
+
+  exportButton.addEventListener("click", () => {
+    const rows = buildHistoryRows();
+    const filteredRows = applyHistoryFiltersToRows(rows);
+    
+    const planting = getCurrentPlantingFilter();
+    let filename = "historico_irrigacao";
+    
+    if (planting) {
+      filename = `historico_plantio_${planting.startDate}_${planting.endDate || "atual"}`;
+    }
+    
+    exportToExcel(filteredRows, filename);
+  });
+
+  exportButton.addEventListener("mouseenter", () => {
+    exportButton.style.transform = "translateY(-1px)";
+    exportButton.style.boxShadow = "0 8px 20px rgba(16, 185, 129, 0.4)";
+  });
+
+  exportButton.addEventListener("mouseleave", () => {
+    exportButton.style.transform = "translateY(0)";
+    exportButton.style.boxShadow = "none";
+  });
+
+  // Adicionar ao lado do botão de recarregar
+  const reloadBtn = document.getElementById("reloadHistoryBtn");
+  if (reloadBtn) {
+    reloadBtn.parentNode.insertBefore(exportButton, reloadBtn.nextSibling);
+  } else {
+    historyHeader.appendChild(exportButton);
+  }
+}
+// ===============================
+// EXPORTAÇÃO PARA EXCEL
+// ===============================
+
+function exportToExcel(rows, filename = "historico_irrigacao") {
+  if (!rows.length) {
+    alert("Não há dados para exportar.");
+    return;
+  }
+
+  // Criar cabeçalhos APENAS com as colunas desejadas
+  const headers = ["Data", "Horário", "Método", "Canteiro", "Volume (mm)"];
+  
+  // Criar dados APENAS com as colunas desejadas
+  const data = rows.map(row => [
+    row.date ? formatDateBR(row.date) : "-",
+    row.time || "--:--",
+    row.method,
+    row.canteiro || "-",
+    row.volume != null ? fmtNum(row.volume, 2) : "—"
+    // REMOVER: chuva (mm) que estava aqui
+  ]);
+
+  // Criar conteúdo CSV
+  let csvContent = "data:text/csv;charset=utf-8,";
+  
+  // Adicionar cabeçalhos
+  csvContent += headers.join(";") + "\r\n";
+  
+  // Adicionar dados
+  data.forEach(row => {
+    csvContent += row.join(";") + "\r\n";
+  });
+
+  // Criar link de download
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+// Função auxiliar para aplicar filtros às linhas para exportação
+function applyHistoryFiltersToRows(allRows) {
+  const startDateInput = document.getElementById("histDateStart");
+  const endDateInput = document.getElementById("histDateEnd");
+  const startTimeInput = document.getElementById("histTimeStart");
+  const endTimeInput = document.getElementById("histTimeEnd");
+  const methodFilter = document.getElementById("histMethod")?.value || "all";
+
+  const startDate = startDateInput?.value || null;
+  const endDate = endDateInput?.value || null;
+  const startTime = startTimeInput?.value || null;
+  const endTime = endTimeInput?.value || null;
+
+  let filtered = allRows;
+
+  const planting = getCurrentPlantingFilter();
+  if (planting) {
+    const pStart = planting.startDate || null;
+    const pEnd = planting.endDate || null;
+
+    filtered = filtered.filter((r) => {
+      if (!r.date) return false;
+      if (pStart && r.date < pStart) return false;
+      if (pEnd && r.date > pEnd) return false;
+      return true;
+    });
+  }
+
+  if (methodFilter === "rbs") {
+    filtered = filtered.filter((r) => r.method === "RBS");
+  } else if (methodFilter === "rl") {
+    filtered = filtered.filter((r) => r.method === "RL");
+  }
+
+  if (startDate) {
+    filtered = filtered.filter((r) => !r.date || r.date >= startDate);
+  }
+  if (endDate) {
+    filtered = filtered.filter((r) => !r.date || r.date <= endDate);
+  }
+
+  const tStart = startTime ? timeToMinutes(startTime) : null;
+  const tEnd = endTime ? timeToMinutes(endTime) : null;
+
+  if (tStart !== null) {
+    filtered = filtered.filter((r) => {
+      const t = timeToMinutes(r.time);
+      if (t === null) return true;
+      return t >= tStart;
+    });
+  }
+  if (tEnd !== null) {
+    filtered = filtered.filter((r) => {
+      const t = timeToMinutes(r.time);
+      if (t === null) return true;
+      return t <= tEnd;
+    });
+  }
+
+  return filtered;
 }
 
 function clearHistoryFilters() {
@@ -2857,7 +3231,8 @@ function initDashboard() {
   loadAllJsons();
 
   addReloadHistoryButton();
-
+  addExportButton();
+  
   const refreshButton = document.getElementById("refreshButton");
   if (refreshButton) {
     refreshButton.addEventListener("click", loadAllJsons);
@@ -2925,5 +3300,4 @@ document.addEventListener("DOMContentLoaded", () => {
     backBtn.addEventListener("click", showLanding);
   }
 });
-
 
