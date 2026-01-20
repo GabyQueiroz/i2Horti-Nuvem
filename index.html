@@ -1,340 +1,633 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
-  <meta charset="UTF-8" />
-  <title>i2Horti • Painel de Irrigação em Nuvem</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <link rel="icon" type="image/png" href="imagens/logo_cor.png" />
-
-  <link rel="stylesheet" href="style.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobilier - Mobiliário para Eventos</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Estilos adicionais para corrigir o layout do CEP */
+        .cep-container {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            border: 2px solid #e0e0e0;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        
+        .cep-container h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.4rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .cep-container h3 i {
+            color: #3498db;
+        }
+        
+        .cep-input-group {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            align-items: flex-start;
+        }
+        
+        .cep-input {
+            flex: 1;
+            position: relative;
+        }
+        
+        .cep-input input {
+            width: 100%;
+            padding: 14px 20px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-family: 'Poppins', sans-serif;
+            transition: all 0.3s ease;
+        }
+        
+        .cep-input input:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+        }
+        
+        .cep-input input::placeholder {
+            color: #999;
+        }
+        
+        #checkCep {
+            padding: 14px 25px;
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+        
+        #checkCep:hover {
+            background: linear-gradient(135deg, #2980b9 0%, #1c6ea4 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(52, 152, 219, 0.3);
+        }
+        
+        .cep-info {
+            font-size: 0.9rem;
+            color: #7f8c8d;
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .cep-info i {
+            color: #3498db;
+        }
+        
+        #cepMessage {
+            margin-top: 15px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: fadeIn 0.5s ease;
+            border-left: 4px solid;
+            min-height: 60px;
+        }
+        
+        #cepMessage.success {
+            background-color: rgba(46, 204, 113, 0.1);
+            border-left-color: #2ecc71;
+            color: #27ae60;
+        }
+        
+        #cepMessage.error {
+            background-color: rgba(231, 76, 60, 0.1);
+            border-left-color: #e74c3c;
+            color: #c0392b;
+        }
+        
+        #cepMessage.info {
+            background-color: rgba(52, 152, 219, 0.1);
+            border-left-color: #3498db;
+            color: #2980b9;
+        }
+        
+        #cepMessage.warning {
+            background-color: rgba(241, 196, 15, 0.1);
+            border-left-color: #f1c40f;
+            color: #d35400;
+        }
+        
+        #cepMessage .message-icon {
+            font-size: 1.5rem;
+            min-width: 30px;
+            text-align: center;
+        }
+        
+        #cepMessage .message-text {
+            flex: 1;
+            line-height: 1.5;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Responsividade */
+        @media (max-width: 768px) {
+            .cep-input-group {
+                flex-direction: column;
+            }
+            
+            #checkCep {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+        
+        /* Estilo para o resumo do orçamento */
+        .budget-summary {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            border: 2px solid #e0e0e0;
+            margin-top: 30px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        
+        .summary-details {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .summary-row.total {
+            border-bottom: none;
+            border-top: 2px solid #3498db;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-top: 10px;
+            padding-top: 15px;
+        }
+    </style>
 </head>
-
 <body>
+    <!-- Container para mensagens do sistema -->
+    <div class="messages-container" id="messagesContainer"></div>
 
-  <section id="landing" class="landing">
-    <header class="landing-header">
-      <div class="landing-title">
-        <img
-          src="imagens/logo_cor.png"
-          class="landing-logo"
-          alt="Logo i2Horti"
-        />
-        <div class="landing-title-text">
-          <h1>i2Horti • Painel de Irrigação da Nuvem</h1>
-          <p>Selecione a propriedade para visualizar clima, canteiros e decisões de irrigação.</p>
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>Login</h2>
+                <span class="close-login-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="login-form">
+                    <div class="form-group">
+                        <label for="loginEmail">E-mail</label>
+                        <input type="email" id="loginEmail" placeholder="seu@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">Senha</label>
+                        <input type="password" id="loginPassword" placeholder="Digite sua senha">
+                    </div>
+                    <div class="form-actions">
+                        <button id="loginButton" class="cta-button">Entrar</button>
+                        <button id="registerButton" class="btn-outline">Cadastrar</button>
+                    </div>
+                    <div id="loginMessage" class="form-messages">
+                        <!-- Mensagens de login serão adicionadas aqui -->
+                    </div>
+                    <p class="login-info">
+                        <small>Clientes: cadastre-se para salvar seus orçamentos.<br>
+                        Admin: use as credenciais específicas.</small>
+                    </p>
+                </div>
+            </div>
         </div>
-      </div>
-    </header>
-
-    <div class="landing-grid">
-      <!-- Dois Vizinhos – ATIVO -->
-      <article class="landing-card landing-card-active" data-farm="doisvizinhos">
-        <div class="landing-card-badge">Ativo</div>
-        <h2>Dois Vizinhos</h2>
-        <p>Propriedade conectada à nuvem. Visualize previsões, canteiros e planos de irrigação.</p>
-        <div class="landing-card-meta">
-          <span>📍 PR</span>
-          <span>Modo: Produção</span>
-        </div>
-        <button class="landing-card-button" type="button">
-          Abrir dashboard
-        </button>
-      </article>
-
-      <!-- Curitiba – EM BREVE -->
-      <article class="landing-card landing-card-disabled" data-farm="curitiba">
-        <div class="landing-card-badge badge-soon">Em breve</div>
-        <h2>Curitiba</h2>
-        <p>Integração em configuração. Em breve os dados desta unidade estarão disponíveis.</p>
-        <div class="landing-card-meta">
-          <span>📍 Curitiba</span>
-          <span>Sem dados</span>
-        </div>
-        <div class="landing-card-hint">
-          Aguardando conexão com estação e sensores.
-        </div>
-      </article>
-
-      <!-- Miringuava – Francisco -->
-      <article class="landing-card landing-card-disabled" data-farm="miringuava-francisco">
-        <div class="landing-card-badge badge-soon">Em breve</div>
-        <h2>Miringuava • Francisco</h2>
-        <p>Propriedade registrada, ainda sem telemetria enviada para a nuvem.</p>
-        <div class="landing-card-meta">
-          <span>📍 Miringuava</span>
-          <span>Sem dados</span>
-        </div>
-        <div class="landing-card-hint">
-          Integração com sensores em fase de planejamento.
-        </div>
-      </article>
-
-      <!-- Miringuava – Rosaldo -->
-      <article class="landing-card landing-card-disabled" data-farm="miringuava-rosaldo">
-        <div class="landing-card-badge badge-soon">Em breve</div>
-        <h2>Miringuava • Rosaldo</h2>
-        <p>Propriedade registrada, ainda sem telemetria enviada para a nuvem.</p>
-        <div class="landing-card-meta">
-          <span>📍 Miringuava</span>
-          <span>Sem dados</span>
-        </div>
-        <div class="landing-card-hint">
-          Integração com sensores em fase de planejamento.
-        </div>
-      </article>
-
-      <!-- Miringuava – Luciane -->
-      <article class="landing-card landing-card-disabled" data-farm="miringuava-luciane">
-        <div class="landing-card-badge badge-soon">Em breve</div>
-        <h2>Miringuava • Luciane</h2>
-        <p>Propriedade registrada, ainda sem telemetria enviada para a nuvem.</p>
-        <div class="landing-card-meta">
-          <span>📍 Miringuava</span>
-          <span>Sem dados</span>
-        </div>
-        <div class="landing-card-hint">
-          Integração com sensores em fase de planejamento.
-        </div>
-      </article>
     </div>
 
-    <footer class="landing-footer">
-      <span>&copy; <span id="landingYear"></span> i2Horti • Irrigação Inteligente em Nuvem</span>
-    </footer>
-  </section>
-
-  <div id="appWrapper" class="app-wrapper app-hidden">
-    <header class="app-header">
-      <div class="app-header-left">
-        <button id="backToLanding" class="back-button" type="button">
-          ← Escolher propriedade
-        </button>
-
-        <div class="app-header-info">
-          <span class="farm-pill">Propriedade: Dois Vizinhos</span>
-
-          <div class="title-with-icon">
-            <img src="imagens/logo_cor.png" class="title-icon" alt="Ícone i2Horti" />
-            <div class="landing-title-text">
-              <h1>Dashboard de Irrigação</h1>
+    <!-- Header com Logo -->
+    <header>
+        <div class="container header-container">
+            <!-- Logo com imagem -->
+            <div class="logo">
+                <a href="#home" class="logo-link">
+                    <img src="logo.png" alt="Mobilier - Mobiliário para Eventos" class="logo-img">
+                    <div class="logo-text-container">
+                        <span class="logo-text">Mobilier</span>
+                        <span class="logo-subtext">Mobiliário para Eventos</span>
+                    </div>
+                </a>
             </div>
-          </div>
-
-          <p class="subtitle">
-            Dados publicados na AWS IoT e armazenados no S3
-            (<code>raspbpibucket/dashboard/</code>) para a unidade Dois Vizinhos.
-          </p>
-
-          <style>
-            .title-with-icon {
-              display: flex;
-              align-items: center;
-              gap: 6px;
-              margin-left: -10px;
-            }
-
-            .title-icon {
-              width: 48px;
-              height: 48px;
-              object-fit: contain;
-              border-radius: 8px;
-            }
-          </style>
+            
+            <!-- Navegação principal -->
+            <div class="main-nav" id="mainNav">
+                <nav>
+                    <ul class="nav-menu">
+                        <li><a href="#home">Início</a></li>
+                        <li><a href="#products">Produtos</a></li>
+                        <li><a href="#budget">Orçamento</a></li>
+                        <li><a href="#ai-assistant">Assistente IA</a></li>
+                        <li><a href="#about">Sobre</a></li>
+                    </ul>
+                </nav>
+                
+                <div class="header-actions">
+                    <div class="user-menu">
+                        <button class="user-menu-btn" id="userMenuBtn">
+                            <i class="fas fa-user"></i>
+                            <span id="userName">Entrar</span>
+                        </button>
+                    </div>
+                    <button class="mobile-menu-btn" id="mobileMenuBtn">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                </div>
+            </div>
         </div>
-      </div>
-
-      <div class="app-header-right">
-        <nav class="app-nav">
-          <button id="navDashboard" class="nav-button nav-button-active" type="button">
-            Visão em tempo real
-          </button>
-          <button id="navHistory" class="nav-button" type="button">
-            Histórico e análises
-          </button>
-        </nav>
-
-        <div class="app-controls">
-          <label class="auto-refresh-label">
-            <input type="checkbox" id="autoRefreshCheckbox" />
-            Atualizar a cada 60s
-          </label>
-          <button id="refreshButton" type="button">Atualizar agora</button>
-          <span id="lastUpdate" class="last-update">Última atualização: --</span>
-        </div>
-      </div>
     </header>
 
-    <main class="app-main">
+    <!-- Hero Section -->
+    <section class="hero" id="home">
+        <div class="container">
+            <h1>Mobiliário para Seu Evento</h1>
+            <p>Especializados em fornecer os melhores móveis para festas, casamentos e eventos corporativos em todo o Paraná e Santa Catarina, com qualidade e compromisso.</p>
+            <a href="#budget" class="cta-button">Solicitar Orçamento</a>
+        </div>
+    </section>
 
-      <section id="dashboardView" class="view view-active">
-   
-        <section class="highlight-strip">
-          <article class="highlight-card" id="highlightRBS">
-            <h2>Última decisão RBS</h2>
-            <p class="highlight-info" id="highlightRbsInfo">Carregando...</p>
-            <p class="highlight-mini" id="highlightRbsExtra"></p>
-          </article>
-
-          <article class="highlight-card" id="highlightRL">
-            <h2>Última decisão RL (PPO)</h2>
-            <p class="highlight-info" id="highlightRlInfo">Carregando...</p>
-            <p class="highlight-mini" id="highlightRlExtra"></p>
-          </article>
-        </section>
-
-        <section class="section">
-          <div class="section-header">
-            <div>
-              <h2>Tópicos monitorados</h2>
-              <p class="section-description">
-                Os cards mostram os tópicos MQTT da unidade <strong>Dois Vizinhos</strong>.
-                Use o filtro abaixo para aplicar a mesma data/horário em todos os cards
-                com histórico (previsão, Plugfield, RBS e RL).
-              </p>
+    <!-- Products Section -->
+    <section id="products">
+        <div class="container">
+            <div class="section-title">
+                <h2>Nossos Produtos</h2>
+                <p>Selecione os itens para seu evento e faça um orçamento personalizado</p>
             </div>
-          </div>
-
-          <div class="filter-bar">
-            <div class="filter-bar-header">
-              <h3>Filtro geral de data e horário</h3>
-              <span class="filter-tag">
-                Aplica-se aos cards de previsão, Plugfield e decisões de irrigação (RBS e RL).
-              </span>
+            
+            <div class="products-grid" id="productsGrid">
+                <!-- Produtos serão carregados via JavaScript -->
             </div>
+        </div>
+    </section>
 
-            <div class="filter-controls">
-              <label>
-                Data
-                <input type="date" id="globalFilterDate" />
-              </label>
-              <label>
-                Horário (opcional)
-                <input type="time" id="globalFilterTime" step="60" />
-              </label>
-              <button id="globalFilterApply" type="button">Aplicar filtro</button>
-              <button id="globalFilterClear" type="button" class="btn-secondary">
-                Limpar
-              </button>
+    <!-- Budget Section -->
+    <section id="budget" class="budget-section">
+        <div class="container">
+            <div class="section-title">
+                <h2>Monte Seu Orçamento</h2>
+                <p>Adicione os itens desejados e calcule o valor total</p>
             </div>
+            
+            <div class="budget-container">
+                <div class="budget-form">
+                    <!-- Container do CEP melhorado -->
+                    <div class="cep-container">
+                        <h3><i class="fas fa-truck"></i> Calcular Frete</h3>
+                        <div class="form-group">
+                            <label for="cep" style="font-weight: 600; margin-bottom: 8px; display: block; color: #2c3e50;">CEP de Entrega*</label>
+                            <div class="cep-input-group">
+                                <div class="cep-input">
+                                    <input type="text" id="cep" placeholder="00000-000" maxlength="9">
+                                </div>
+                                <button id="checkCep">
+                                    <i class="fas fa-calculator"></i> Calcular Frete
+                                </button>
+                            </div>
+                            <div class="cep-info">
+                                <i class="fas fa-info-circle"></i>
+                                <span>Apenas para Paraná (PR) e Santa Catarina (SC)</span>
+                            </div>
+                        </div>
+                        <!-- Mensagem do frete -->
+                        <div id="cepMessage"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label style="font-weight: 600; margin-bottom: 15px; display: block; color: #2c3e50; font-size: 1.1rem;">Selecione os itens para seu orçamento:</label>
+                        <div class="items-selection" id="itemsSelection">
+                            <!-- Itens serão carregados via JavaScript -->
+                        </div>
+                    </div>
+                    
+                    <div class="budget-summary">
+                        <h3 style="color: #2c3e50; margin-bottom: 20px; font-size: 1.4rem; display: flex; align-items: center; gap: 10px;">
+                            <i class="fas fa-file-invoice-dollar"></i> Resumo do Orçamento
+                        </h3>
+                        <div class="summary-details">
+                            <div class="summary-row">
+                                <span>Subtotal:</span>
+                                <span id="subtotal">R$ 0,00</span>
+                            </div>
+                            <div class="summary-row">
+                                <span>Frete:</span>
+                                <span id="freight">R$ 0,00</span>
+                            </div>
+                            <div class="summary-row total">
+                                <span>Total:</span>
+                                <span id="total">R$ 0,00</span>
+                            </div>
+                        </div>
+                        
+                        <div class="budget-actions" style="display: flex; gap: 15px; margin-top: 25px;">
+                            <button id="saveBudget" class="cta-button" style="flex: 1; padding: 15px; font-size: 1.1rem;">
+                                <i class="fas fa-save"></i> Salvar Orçamento
+                            </button>
+                            <button id="clearBudget" class="btn-outline" style="flex: 1; padding: 15px; font-size: 1.1rem;">
+                                <i class="fas fa-trash-alt"></i> Limpar Tudo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="budget-cart" style="background: white; padding: 25px; border-radius: 12px; border: 2px solid #e0e0e0; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);">
+                    <h3 style="color: #2c3e50; margin-bottom: 20px; font-size: 1.4rem; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-shopping-cart"></i> Carrinho de Itens
+                    </h3>
+                    <div class="cart-items" id="cartItems" style="min-height: 200px;">
+                        <p class="empty-cart" style="text-align: center; color: #7f8c8d; padding: 40px 20px;">
+                            <i class="fas fa-shopping-cart" style="font-size: 3rem; margin-bottom: 15px; display: block; color: #bdc3c7;"></i>
+                            Nenhum item adicionado
+                        </p>
+                    </div>
+                    <div class="cart-total" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 20px; text-align: center;">
+                        <p style="font-size: 1.1rem; font-weight: 600; color: #2c3e50; margin: 0;">
+                            Itens selecionados: <span id="totalItems" style="color: #3498db; font-size: 1.3rem;">0</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 
-            <p class="filter-info" id="rbsFilterInfo">
-              Mostrando a última decisão de irrigação RBS disponível (sem filtro de data/horário).
-            </p>
-          </div>
+    <!-- AI Assistant Section -->
+    <section id="ai-assistant" class="ai-section">
+        <div class="container">
+            <div class="section-title">
+                <h2>Assistente IA para Eventos</h2>
+                <p>Descreva seu evento e nossa IA irá sugerir os melhores móveis e quantidades</p>
+            </div>
+            
+            <div class="ai-container">
+                <div class="ai-input">
+                    <textarea id="eventDescription" placeholder="Descreva seu evento: tipo de festa, número de convidados, local (interno/externo), estilo desejado, etc..."></textarea>
+                    <button id="aiSuggest" class="cta-button">
+                        <i class="fas fa-robot"></i> Obter Sugestões
+                    </button>
+                </div>
+                
+                <div class="ai-suggestions">
+                    <h3>Sugestões da IA</h3>
+                    <div class="suggestions-content" id="aiSuggestions">
+                        <p class="empty-suggestions">Descreva seu evento acima para receber sugestões personalizadas.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 
-          <div id="cardsContainer" class="cards-container"></div>
-        </section>
-      </section>
+    <!-- About Section -->
+    <section id="about" class="about-section">
+        <div class="container">
+            <div class="about-container">
+                <div class="about-content">
+                    <h2>Sobre a Mobilier</h2>
+                    <p>Com mais de uma década de experiência, a Mobilier é referência em mobiliário para eventos no sul do Brasil. Oferecemos produtos de alta qualidade para transformar seu evento em uma experiência memorável.</p>
+                    <p>Atendemos exclusivamente os estados do Paraná e Santa Catarina, garantindo um serviço ágil e personalizado para cada cliente.</p>
+                    
+                    <div class="contact-info">
+                        <h3>Entre em Contato</h3>
+                        <p><i class="fas fa-phone"></i> (41) 99999-9999</p>
+                        <p><i class="fas fa-envelope"></i> contato@mobilier.com.br</p>
+                        <p><i class="fas fa-map-marker-alt"></i> Ponta Grossa - PR</p>
+                        <p><i class="fab fa-instagram"></i> @mobilier_mobiliario</p>
+                    </div>
+                </div>
+                
+                <div class="about-image">
+                    <div class="image-placeholder">
+                        <i class="fas fa-chair"></i>
+                        <p>Imagem representativa do nosso mobiliário</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 
-      <section id="historyView" class="view view-hidden">
-        <header class="history-header">
-          <div>
-            <h2>Histórico de Irrigações e Previsões</h2>
-            <p>
-              Explore todas as decisões RBS e RL, filtre por data/horário
-              e visualize um gráfico comparativo das irrigações.
-            </p>
-          </div>
-        </header>
+    <!-- Admin Panel Modal -->
+    <div id="adminModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Painel Administrativo</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            
+            <div class="modal-body">
+                <div class="admin-tabs">
+                    <button class="admin-tab active" data-tab="inventory">Gerenciar Estoque</button>
+                    <button class="admin-tab" data-tab="budgets">Orçamentos</button>
+                    <button class="admin-tab" data-tab="settings">Configurações</button>
+                </div>
+                
+                <div class="admin-content">
+                    <!-- Inventory Management -->
+                    <div id="inventoryTab" class="admin-tab-content active">
+                        <h3>Estoque de Produtos</h3>
+                        <div class="admin-products-list" id="adminProductsList">
+                            <!-- Produtos admin serão carregados via JavaScript -->
+                        </div>
+                        <button id="addProduct" class="btn-secondary">
+                            <i class="fas fa-plus"></i> Adicionar Produto
+                        </button>
+                    </div>
+                    
+                    <!-- Budgets Management -->
+                    <div id="budgetsTab" class="admin-tab-content">
+                        <h3>Orçamentos Salvos</h3>
+                        <div class="budgets-list" id="budgetsList">
+                            <p class="empty-message">Nenhum orçamento salvo ainda.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Settings -->
+                    <div id="settingsTab" class="admin-tab-content">
+                        <h3>Configurações do Sistema</h3>
+                        <div class="settings-form">
+                            <div class="form-group">
+                                <label for="companyName">Nome da Empresa</label>
+                                <input type="text" id="companyName" value="Mobilier - Mobiliário para Eventos">
+                            </div>
+                            <div class="form-group">
+                                <label for="deliveryStates">Estados para Entrega</label>
+                                <input type="text" id="deliveryStates" value="PR, SC" readonly>
+                            </div>
+                            <button id="saveSettings" class="cta-button">Salvar Configurações</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        <section class="planting-selector-section">
-          <div class="planting-selector-header">
-            <h3>Selecione o plantio</h3>
-            <p class="planting-selector-description">
-              Cada plantio é identificado a partir dos dados cadastrados.
-              Ao selecionar um plantio, o histórico abaixo é filtrado automaticamente
-              para o intervalo de datas de <strong>plantio</strong> e <strong>colheita prevista</strong>.
-            </p>
-          </div>
-
-          <div
-            id="plantingButtonsContainer"
-            class="planting-buttons-container modern-planting-buttons">
-          </div>
-
-          <p id="plantingSelectedInfo" class="planting-selected-info">
-            Nenhum plantio selecionado. Mostrando registros de toda a temporada.
-          </p>
-        </section>
-
-        <section class="history-filters">
-          <div class="history-filter-row">
-            <label>
-              Data inicial
-              <input type="date" id="histDateStart" />
-            </label>
-            <label>
-              Data final
-              <input type="date" id="histDateEnd" />
-            </label>
-            <label>
-              Horário inicial
-              <input type="time" id="histTimeStart" step="60" />
-            </label>
-            <label>
-              Horário final
-              <input type="time" id="histTimeEnd" step="60" />
-            </label>
-            <label>
-              Método
-              <select id="histMethod">
-                <option value="all">RBS + RL</option>
-                <option value="rbs">Somente RBS</option>
-                <option value="rl">Somente RL</option>
-              </select>
-            </label>
-          </div>
-          <div class="history-filter-actions">
-            <button id="histApply" type="button">Aplicar filtros</button>
-            <button id="histClear" type="button" class="btn-secondary">Limpar</button>
-          </div>
-          <p id="histInfo" class="history-info">
-            Carregando dados de histórico...
-          </p>
-        </section>
-
-        <section class="history-chart-section">
-          <h3>Gráfico de lâminas de irrigação (RBS × RL)</h3>
-          <p class="history-chart-subtitle">
-            Cada barra representa a lâmina diária acumulada por método.
-            Passe o mouse para ver os valores exatos.
-          </p>
-          <div class="history-chart-wrapper">
-            <canvas id="historyChart"></canvas>
-          </div>
-        </section>
-
-        <section class="history-table-section">
-          <h3>Registros filtrados</h3>
-          <div class="history-table-wrapper">
-            <table class="history-table">
-              <thead>
-                <tr>
-                  <th>Data</th>
-                  <th>Horário</th>
-                  <th>Método</th>
-                  <th>Canteiro</th>
-                  <th>Volume (mm)</th>
-                </tr>
-              </thead>
-              <tbody id="historyTableBody">
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section id="irrigationSummary" class="irrigation-summary">
-        </section>
-      </section>
-    </main>
-
-    <footer class="app-footer">
-      <p>Sistema de Irrigação Inteligente • <span id="year"></span></p>
+    <!-- Footer com Logo -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <!-- Logo no Footer -->
+                <div class="footer-logo">
+                    <div class="logo-link footer-logo-link">
+                        <img src="logo.png" alt="Mobilier" class="logo-img-footer">
+                        <div class="footer-logo-text">
+                            <h3>Mobilier</h3>
+                            <p>Mobiliário para Eventos</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="footer-links">
+                    <h4>Links Rápidos</h4>
+                    <ul>
+                        <li><a href="#home">Início</a></li>
+                        <li><a href="#products">Produtos</a></li>
+                        <li><a href="#budget">Orçamento</a></li>
+                        <li><a href="#about">Sobre</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer-contact">
+                    <h4>Contato</h4>
+                    <p><i class="fab fa-instagram"></i> @mobilier_mobiliario</p>
+                    <p><i class="fas fa-phone"></i> (41) 99999-9999</p>
+                    <p><i class="fas fa-envelope"></i> contato@mobilier.com.br</p>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p>&copy; 2026 Mobilier - Mobiliário para Eventos. Todos os direitos reservados.</p>
+            </div>
+        </div>
     </footer>
-  </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="script.js"></script>
+    <script src="script.js"></script>
+    <script>
+        // Função para mostrar mensagens do CEP com formato correto
+        function showCepMessage(message, type = 'info') {
+            console.log('Exibindo mensagem CEP:', message, type);
+            
+            const cepMessage = document.getElementById('cepMessage');
+            if (!cepMessage) {
+                console.error('Elemento cepMessage não encontrado!');
+                return;
+            }
+            
+            // Define ícones baseados no tipo
+            let icon = '';
+            switch(type) {
+                case 'success':
+                    icon = '<i class="fas fa-check-circle message-icon"></i>';
+                    break;
+                case 'error':
+                    icon = '<i class="fas fa-times-circle message-icon"></i>';
+                    break;
+                case 'warning':
+                    icon = '<i class="fas fa-exclamation-circle message-icon"></i>';
+                    break;
+                default:
+                    icon = '<i class="fas fa-info-circle message-icon"></i>';
+            }
+            
+            // Remove caracteres especiais e emojis de texto
+            message = message.replace(/🎉/g, '')
+                             .replace(/🚚/g, '')
+                             .replace(/❌/g, '')
+                             .replace(/✅/g, '')
+                             .replace(/✔️/g, '')
+                             .trim();
+            
+            // Atualiza a mensagem
+            cepMessage.innerHTML = icon + '<div class="message-text">' + message + '</div>';
+            cepMessage.className = '';
+            cepMessage.classList.add(type);
+            
+            // Anima a entrada
+            cepMessage.style.animation = 'fadeIn 0.5s ease';
+        }
+        
+        // Adicione este script no final para garantir que o botão CEP funcione
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Configurando botão CEP...');
+            
+            const checkCepBtn = document.getElementById('checkCep');
+            if (checkCepBtn) {
+                console.log('Botão CEP encontrado!');
+                checkCepBtn.addEventListener('click', function() {
+                    console.log('Botão CEP clicado!');
+                    // Chama a função checkCep do script.js
+                    if (typeof checkCep === 'function') {
+                        checkCep();
+                    } else {
+                        console.error('Função checkCep não encontrada!');
+                        showCepMessage('Erro: Função de cálculo de frete não carregada.', 'error');
+                    }
+                });
+            } else {
+                console.error('Botão CEP não encontrado!');
+            }
+            
+            // Formatação automática do CEP
+            const cepInput = document.getElementById('cep');
+            if (cepInput) {
+                cepInput.addEventListener('input', function(e) {
+                    let value = e.target.value.replace(/\D/g, '');
+                    if (value.length > 5) {
+                        value = value.substring(0, 5) + '-' + value.substring(5, 8);
+                    }
+                    e.target.value = value;
+                });
+                
+                // Permite calcular com Enter
+                cepInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        if (typeof checkCep === 'function') {
+                            checkCep();
+                        }
+                    }
+                });
+            }
+            
+            // Substitui a função showCepMessage no escopo global
+            window.showCepMessage = showCepMessage;
+        });
+    </script>
 </body>
 </html>
