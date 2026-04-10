@@ -694,6 +694,15 @@ function showLanding() {
   landing.style.display = "flex";
 }
 
+function openFarmDashboard(farmId) {
+  if (farmId && FARM_CONFIG[farmId]) {
+    currentFarm = farmId;
+  }
+  showDashboard();
+}
+
+window.openFarmDashboard = openFarmDashboard;
+
 function showView(viewId) {
   const dashboardView = document.getElementById("dashboardView");
   const historyView = document.getElementById("historyView");
