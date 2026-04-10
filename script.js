@@ -2265,7 +2265,7 @@ async function loadAllJsons() {
   if (lastUpdateEl) {
     const now = new Date();
     lastUpdateEl.textContent =
-      "Ãšltima atualizaÃ§Ã£o: " +
+      "Última atualização: " +
       now.toLocaleString("pt-BR", {
         day: "2-digit",
         month: "2-digit",
@@ -2718,8 +2718,8 @@ function applyHistoryFilters() {
     if (infoEl) {
       infoEl.textContent =
         currentFarm === "miringuava-luciane"
-          ? `Ainda nao ha historico disponivel na AWS para a UC ${getCurrentFarmConfig().ucId}.`
-          : "Ainda nao ha dados de historico carregados.";
+          ? `Ainda não há histórico disponível na AWS para a UC ${getCurrentFarmConfig().ucId}.`
+          : "Ainda não há dados de histórico carregados.";
     }
     tableBody.innerHTML = "";
     updateHistoryChart([]);
@@ -3045,7 +3045,7 @@ function addReloadHistoryButton() {
   const reloadButton = document.createElement("button");
   reloadButton.id = "reloadHistoryBtn";
   reloadButton.type = "button";
-  reloadButton.textContent = "ðŸ”„ Recarregar Dados HistÃ³ricos";
+  reloadButton.textContent = "Recarregar dados históricos";
   reloadButton.style.marginTop = "1rem";
   reloadButton.style.padding = "0.5rem 1rem";
   reloadButton.style.borderRadius = "999px";
@@ -3057,11 +3057,11 @@ function addReloadHistoryButton() {
   reloadButton.style.transition = "all 0.15s ease";
 
   reloadButton.addEventListener("click", () => {
-    reloadButton.textContent = "â³ Carregando...";
+    reloadButton.textContent = "Carregando...";
     reloadButton.disabled = true;
 
     loadCompleteHistoricalData().finally(() => {
-      reloadButton.textContent = "ðŸ”„ Recarregar Dados HistÃ³ricos";
+      reloadButton.textContent = "Recarregar dados históricos";
       reloadButton.disabled = false;
     });
   });
@@ -3090,7 +3090,7 @@ function addExportButton() {
   const exportButton = document.createElement("button");
   exportButton.id = "exportExcelBtn";
   exportButton.type = "button";
-  exportButton.textContent = "ðŸ“¥ Exportar para Excel";
+  exportButton.textContent = "Exportar para Excel";
   exportButton.style.marginTop = "1rem";
   exportButton.style.marginLeft = "0.5rem";
   exportButton.style.padding = "0.5rem 1rem";
@@ -3153,9 +3153,9 @@ function updateFarmContext() {
 
   if (topicsDescription) {
     topicsDescription.innerHTML =
-      `Os cards mostram os tÃƒÂ³picos MQTT da unidade <strong>${farm.unitLabel}</strong>. ` +
-      `Use o filtro abaixo para aplicar a mesma data/horÃƒÂ¡rio em todos os cards ` +
-      `com histÃƒÂ³rico (previsÃƒÂ£o, Plugfield, RBS e RL).`;
+      `Os cards mostram os tópicos MQTT da unidade <strong>${farm.unitLabel}</strong>. ` +
+      `Use o filtro abaixo para aplicar a mesma data/horário em todos os cards ` +
+      `com histórico (previsão, Plugfield, RBS e RL).`;
   }
 
   repairVisibleText();
