@@ -157,6 +157,32 @@ function resetFarmDataState() {
   if (histMethod) histMethod.value = "all";
 }
 
+function fixMojibakeText(value) {
+  if (value === null || value === undefined) return value;
+  const text = String(value);
+  if (!/[ÃÂâð]/.test(text)) return text;
+
+  try {
+    return decodeURIComponent(escape(text));
+  } catch (error) {
+    return text;
+  }
+}
+
+function repairVisibleText(root = document.body) {
+  if (!root) return;
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+
+  while (node) {
+    if (node.nodeValue && node.nodeValue.trim()) {
+      node.nodeValue = fixMojibakeText(node.nodeValue);
+    }
+    node = walker.nextNode();
+  }
+}
+
 // ===============================
 // UTILITÃRIOS
 // ===============================
@@ -165,8 +191,8 @@ function createMetric(label, value, extraLabelClass = "") {
   const div = document.createElement("div");
   div.className = "metric";
   div.innerHTML = `
-    <div class="metric-label ${extraLabelClass}">${label}</div>
-    <div class="metric-value">${value}</div>
+    <div class="metric-label ${extraLabelClass}">${fixMojibakeText(label)}</div>
+    <div class="metric-value">${fixMojibakeText(value)}</div>
   `;
   return div;
 }
@@ -179,7 +205,7 @@ function createMiniTable(headers, rows) {
   const trHead = document.createElement("tr");
   headers.forEach((h) => {
     const th = document.createElement("th");
-    th.textContent = h;
+    th.textContent = fixMojibakeText(h);
     trHead.appendChild(th);
   });
   thead.appendChild(trHead);
@@ -189,7 +215,7 @@ function createMiniTable(headers, rows) {
     const tr = document.createElement("tr");
     row.forEach((cell) => {
       const td = document.createElement("td");
-      td.textContent = cell;
+      td.textContent = fixMojibakeText(cell);
       tr.appendChild(td);
     });
     tbody.appendChild(tr);
@@ -489,11 +515,13 @@ function renderPlantingFilterButtons() {
     emptyMessage.style.textAlign = "center";
     emptyMessage.style.padding = "2rem";
     emptyMessage.style.color = "#6b7280";
+    const farm = getCurrentFarmConfig();
     emptyMessage.innerHTML = `
-      <div style="font-size: 2rem; margin-bottom: 0.5rem;">ðŸŒ±</div>
-      <p>Nenhum plantio cadastrado ainda.</p>
+      <div style="font-size: 2rem; margin-bottom: 0.5rem;">🌱</div>
+      <p>Nenhum plantio cadastrado para a UC ${farm.ucId}.</p>
     `;
     container.appendChild(emptyMessage);
+    repairVisibleText(container);
     return;
   }
 
@@ -524,6 +552,8 @@ function renderPlantingFilterButtons() {
     btn.addEventListener("click", () => setPlantingFilter(p.id));
     container.appendChild(btn);
   });
+
+  repairVisibleText(container);
 }
 
 function syncPlantingFiltersFromDashboard() {
@@ -2186,6 +2216,7 @@ async function loadJsonForTopic(config) {
 
     renderVisual(config, visualEl, data);
     jsonEl.textContent = pretty;
+    repairVisibleText(card);
 
     statusDot.classList.add("online");
     statusText.textContent = "OK";
@@ -2684,11 +2715,17 @@ function applyHistoryFilters() {
   const baseRows = buildHistoryRows();
 
   if (!baseRows.length) {
-    if (infoEl) infoEl.textContent = "Ainda nÃ£o hÃ¡ dados de histÃ³rico carregados.";
+    if (infoEl) {
+      infoEl.textContent =
+        currentFarm === "miringuava-luciane"
+          ? `Ainda nao ha historico disponivel na AWS para a UC ${getCurrentFarmConfig().ucId}.`
+          : "Ainda nao ha dados de historico carregados.";
+    }
     tableBody.innerHTML = "";
     updateHistoryChart([]);
     const summarySection = document.getElementById("irrigationSummary");
     if (summarySection) summarySection.innerHTML = "";
+    repairVisibleText();
     return;
   }
 
@@ -2751,6 +2788,7 @@ function applyHistoryFilters() {
     updateHistoryChart([]);
     const summarySection = document.getElementById("irrigationSummary");
     if (summarySection) summarySection.innerHTML = "";
+    repairVisibleText();
     return;
   }
 
@@ -2766,6 +2804,7 @@ function applyHistoryFilters() {
   renderHistoryTable(filtered);
   updateHistoryChart(filtered);
   renderIrrigationSummary(filtered);
+  repairVisibleText();
 }
 
 // ===============================
@@ -3118,6 +3157,8 @@ function updateFarmContext() {
       `Use o filtro abaixo para aplicar a mesma data/horÃƒÂ¡rio em todos os cards ` +
       `com histÃƒÂ³rico (previsÃƒÂ£o, Plugfield, RBS e RL).`;
   }
+
+  repairVisibleText();
 }
 
 // ===============================
@@ -3217,4 +3258,5 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   updateFarmContext();
+  repairVisibleText();
 }); 
