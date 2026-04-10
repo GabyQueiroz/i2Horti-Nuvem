@@ -227,7 +227,7 @@ function createMiniTable(headers, rows) {
 }
 
 function fmtNum(v, casas = 2) {
-  if (v === null || v === undefined) return "â€”";
+  if (v === null || v === undefined) return "-";
   if (typeof v !== "number" || Number.isNaN(v)) return String(v);
   return v.toFixed(casas);
 }
@@ -543,7 +543,7 @@ function renderPlantingFilterButtons() {
     const startDate = p.startDate ? formatDateBR(p.startDate) : "-";
     const endDate = p.endDate ? formatDateBR(p.endDate) : "-";
 
-    btn.innerHTML = `<span>${startDate} â†’ ${endDate}</span>`;
+    btn.innerHTML = `<span>${startDate} → ${endDate}</span>`;
 
     if (p.subtitle) {
       btn.title = p.subtitle;
@@ -580,10 +580,10 @@ function syncPlantingFiltersFromDashboard() {
         id: key,
         startDate: start,
         endDate: end,
-        label: `Plantio: ${formatDateBR(start)} atÃ© ${
-          end ? formatDateBR(end) : "â€”"
+        label: `Plantio: ${formatDateBR(start)} até ${
+          end ? formatDateBR(end) : "-"
         }`,
-        subtitle: `${vegName}${canteiroNames ? " â€¢ " + canteiroNames : ""}`,
+        subtitle: `${vegName}${canteiroNames ? " • " + canteiroNames : ""}`,
       });
     }
   });
@@ -1131,7 +1131,7 @@ function renderCanteiros(visualEl, data) {
 
     const status = document.createElement("div");
     status.className = "canteiro-status";
-    status.textContent = c.status || "â€”";
+    status.textContent = c.status || "-";
 
     header.appendChild(name);
     header.appendChild(status);
@@ -1146,38 +1146,38 @@ function renderCanteiros(visualEl, data) {
       l.textContent = label;
       const v = document.createElement("div");
       v.className = "canteiro-field-value";
-      v.textContent = value ?? "â€”";
+      v.textContent = value ?? "-";
       wrapper.appendChild(l);
       wrapper.appendChild(v);
       body.appendChild(wrapper);
     }
 
-    addField("Ãrea (mÂ²)", c.area);
-    addField("Cultura", c.culture?.name || "â€”");
+    addField("Área (m²)", c.area);
+    addField("Cultura", c.culture?.name || "-");
     addField(
       "Umidade solo (%)",
-      c.soil_humidity?.toFixed?.(1) ?? c.soil_humidity ?? "â€”"
+      c.soil_humidity?.toFixed?.(1) ?? c.soil_humidity ?? "-"
     );
     addField(
-      "Temp. solo (Â°C)",
-      c.soil_temperature?.toFixed?.(1) ?? c.soil_temperature ?? "â€”"
+      "Temp. solo (°C)",
+      c.soil_temperature?.toFixed?.(1) ?? c.soil_temperature ?? "-"
     );
     addField(
       "Umidade ar (%)",
-      c.air_humitidy?.toFixed?.(1) ?? c.air_humitidy ?? "â€”"
+      c.air_humitidy?.toFixed?.(1) ?? c.air_humitidy ?? "-"
     );
     addField(
-      "Temp. ar (Â°C)",
-      c.air_temperature?.toFixed?.(1) ?? c.air_temperature ?? "â€”"
+      "Temp. ar (°C)",
+      c.air_temperature?.toFixed?.(1) ?? c.air_temperature ?? "-"
     );
 
     const last = formatIsoToDateTimeBR(c.last_irrigation);
     const next = formatIsoToDateTimeBR(c.next_irrigation);
 
-    addField("Ãšltima irrigaÃ§Ã£o (Data)", last.date);
-    addField("Ãšltima irrigaÃ§Ã£o (Hora)", last.time);
-    addField("PrÃ³x. irrigaÃ§Ã£o (Data)", next.date);
-    addField("PrÃ³x. irrigaÃ§Ã£o (Hora)", next.time);
+    addField("Última irrigação (Data)", last.date);
+    addField("Última irrigação (Hora)", last.time);
+    addField("Próx. irrigação (Data)", next.date);
+    addField("Próx. irrigação (Hora)", next.time);
 
     card.appendChild(header);
     card.appendChild(body);
@@ -1201,13 +1201,13 @@ function buildCultureCard(cult) {
   const canteiroNames = (cult.canteiros || [])
     .map((c) => c.name || `Canteiro ${c.id}`)
     .join(", ");
-  title.textContent = `${cult.vegetable?.name || "Cultura"} â€¢ ${canteiroNames}`;
+  title.textContent = `${cult.vegetable?.name || "Cultura"}${canteiroNames ? " • " + canteiroNames : ""}`;
 
   const subtitle = document.createElement("div");
   subtitle.className = "culture-subtitle";
   subtitle.textContent = `Plantio: ${
     cult.planting_date || "-"
-  } â€¢ Colheita prevista: ${cult.expected_harvest_date || "-"}`;
+  } • Colheita prevista: ${cult.expected_harvest_date || "-"}`;
 
   header.appendChild(title);
   header.appendChild(subtitle);
@@ -1219,7 +1219,7 @@ function buildCultureCard(cult) {
   blockParams.className = "culture-block";
   const blockParamsTitle = document.createElement("div");
   blockParamsTitle.className = "culture-block-title";
-  blockParamsTitle.textContent = "ParÃ¢metros da cultura";
+  blockParamsTitle.textContent = "Parâmetros da cultura";
   const paramsGrid = document.createElement("div");
   paramsGrid.className = "culture-grid";
 
@@ -1227,18 +1227,18 @@ function buildCultureCard(cult) {
   const kc = cult.vegetable?.kc_coefficient || {};
 
   paramsGrid.appendChild(
-    createMetric("Profundidade raiz inicial (m)", root.initial ?? "â€”", "soil")
+    createMetric("Profundidade raiz inicial (m)", root.initial ?? "-", "soil")
   );
   paramsGrid.appendChild(
-    createMetric("Profundidade raiz final (m)", root.final ?? "â€”", "soil")
+    createMetric("Profundidade raiz final (m)", root.final ?? "-", "soil")
   );
-  paramsGrid.appendChild(createMetric("Kc inicial", kc.initial ?? "â€”", "kc"));
-  paramsGrid.appendChild(createMetric("Kc mÃ©dio", kc.medium ?? "â€”", "kc"));
-  paramsGrid.appendChild(createMetric("Kc final", kc.final ?? "â€”", "kc"));
+  paramsGrid.appendChild(createMetric("Kc inicial", kc.initial ?? "-", "kc"));
+  paramsGrid.appendChild(createMetric("Kc médio", kc.medium ?? "-", "kc"));
+  paramsGrid.appendChild(createMetric("Kc final", kc.final ?? "-", "kc"));
   paramsGrid.appendChild(
     createMetric(
-      "Fator de depleÃ§Ã£o",
-      cult.vegetable?.depletion_factor ?? "â€”",
+      "Fator de depleção",
+      cult.vegetable?.depletion_factor ?? "-",
       "soil"
     )
   );
@@ -1250,7 +1250,7 @@ function buildCultureCard(cult) {
   blockPhases.className = "culture-block";
   const blockPhasesTitle = document.createElement("div");
   blockPhasesTitle.className = "culture-block-title";
-  blockPhasesTitle.textContent = "Fases de desenvolvimento e regras de irrigaÃ§Ã£o";
+  blockPhasesTitle.textContent = "Fases de desenvolvimento e regras de irrigação";
 
   const phasesWrapper = document.createElement("div");
   phasesWrapper.className = "culture-phases-wrapper";
