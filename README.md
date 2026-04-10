@@ -1,6 +1,6 @@
 # i2Horti Nuvem
 
-Painel web para visualizacao de dados agronomicos, previsoes meteorologicas, canteiros, culturas e decisoes de irrigacao publicadas na AWS.
+Painel web para visualizacao de dados da nuvem, previsoes meteorologicas, canteiros, culturas e decisoes de irrigacao publicadas na AWS.
 
 O sistema foi construido como uma aplicacao frontend estatica, sem backend local, consumindo arquivos JSON publicados em buckets S3. A interface permite selecionar uma propriedade, acompanhar os topicos monitorados em tempo real e consultar o historico de irrigacoes RBS e RL.
 
@@ -33,18 +33,8 @@ Fluxo resumido:
 
 Atualmente a interface possui duas propriedades ativas:
 
-- `Dois Vizinhos`
-- `Miringuava - Luciane`
-
-### Regra especial da propriedade Luciane
-
-A propriedade `Luciane` foi configurada para exibir somente dados cuja `UC_id` seja `3003`.
-
-Isso significa que:
-
-- dados sem `UC_id 3003` nao devem aparecer na interface da Luciane
-- quando um topico nao tiver dados da `UC 3003`, o painel mostra ausencia de dados para essa unidade
-- `Dois Vizinhos` continua usando o comportamento padrao da aplicacao
+- `Dois Vizinhos` UC_ID: 4000
+- `Miringuava - Luciane` UC_ID: 3003
 
 ## Tecnologias utilizadas
 
@@ -106,7 +96,7 @@ Concentra toda a logica de negocio do frontend:
 
 ## Topicos monitorados
 
-Os topicos configurados no sistema sao definidos em `TOPICS` no arquivo [script.js](/C:/Users/gabri/OneDrive/Documentos/UTFPR/WebNuvem/i2Horti-Nuvem-main/i2Horti-Nuvem-main/script.js).
+Os topicos configurados no sistema sao definidos em `TOPICS` 
 
 Topicos atualmente usados:
 
@@ -377,23 +367,6 @@ Ao mudar de propriedade:
 - dados do dashboard sao recarregados
 - historico e reprocessado conforme a unidade selecionada
 
-## Limitacoes atuais
-
-- depende de conectividade com a AWS para funcionar corretamente
-- nao existe backend local
-- a consistencia do painel depende do formato dos JSONs publicados
-- se um topico nao tiver `UC_id` quando a propriedade exigir filtro estrito, o dado nao e exibido
-- a exportacao atual gera `CSV`, embora o texto da interface mencione Excel
-
-## Melhorias futuras sugeridas
-
-- suporte a mais propriedades com isolamento por `UC_id`
-- internacionalizacao e normalizacao completa de acentos
-- testes automatizados de parsing dos JSONs
-- separacao do codigo JS em modulos
-- configuracao externa de URLs e propriedades
-- tratamento visual explicito para conflitos de dados entre unidades
-
 ## Solucao de problemas
 
 ### O dashboard nao carrega nada
@@ -413,24 +386,3 @@ Possiveis causas:
 - os filtros estao restritivos demais
 - a propriedade atual exige `UC_id` especifico e os arquivos nao possuem registros dessa unidade
 
-### O Git nao funciona
-
-Se aparecer `not a git repository`, inicialize com:
-
-```powershell
-git init
-```
-
-Se aparecer erro de conexao com GitHub:
-
-- verifique DNS
-- verifique acesso a `github.com`
-- confirme a URL remota com `git remote -v`
-
-## Licenca
-
-Definir conforme a politica do projeto.
-
-## Autoria
-
-Projeto i2Horti para visualizacao de irrigacao inteligente em nuvem.
