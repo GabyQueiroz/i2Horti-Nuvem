@@ -159,14 +159,46 @@ function resetFarmDataState() {
 
 function fixMojibakeText(value) {
   if (value === null || value === undefined) return value;
-  const text = String(value);
-  if (!/[ÃÂâð]/.test(text)) return text;
+  let text = String(value);
 
-  try {
-    return decodeURIComponent(escape(text));
-  } catch (error) {
-    return text;
+  const directReplacements = [
+    ["Ãš", "Ú"],
+    ["Ã", "Á"],
+    ["Ã©", "é"],
+    ["Ãª", "ê"],
+    ["Ã§", "ç"],
+    ["Ã£", "ã"],
+    ["Ã¡", "á"],
+    ["Ã³", "ó"],
+    ["Ãº", "ú"],
+    ["Ã­", "í"],
+    ["Â°C", "°C"],
+    ["mÂ²", "m²"],
+    ["â€”", "-"],
+    ["â€¢", "•"],
+    ["â†’", "→"],
+    ["âœ…", "✓"],
+    ["ðŸŒ±", "🌱"],
+    ["ðŸ“¥", ""],
+    ["ðŸ”„", ""],
+    ["â³", ""],
+  ];
+
+  for (let i = 0; i < 3; i += 1) {
+    if (/[ÃÂâð]/.test(text)) {
+      try {
+        text = decodeURIComponent(escape(text));
+      } catch (error) {
+        break;
+      }
+    }
   }
+
+  directReplacements.forEach(([from, to]) => {
+    text = text.split(from).join(to);
+  });
+
+  return text;
 }
 
 function repairVisibleText(root = document.body) {
@@ -181,6 +213,30 @@ function repairVisibleText(root = document.body) {
     }
     node = walker.nextNode();
   }
+}
+
+let textRepairObserverStarted = false;
+
+function ensureTextRepairObserver() {
+  if (textRepairObserverStarted || !document.body) return;
+  textRepairObserverStarted = true;
+
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      mutation.addedNodes.forEach((node) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          node.nodeValue = fixMojibakeText(node.nodeValue);
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+          repairVisibleText(node);
+        }
+      });
+    });
+  });
+
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
 }
 
 // ===============================
@@ -3227,6 +3283,7 @@ function initDashboard() {
 
 // DOMContentLoaded
 document.addEventListener("DOMContentLoaded", () => {
+  ensureTextRepairObserver();
   const yearSpan = document.getElementById("year");
   const landingYear = document.getElementById("landingYear");
   const y = new Date().getFullYear();
