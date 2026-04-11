@@ -1,19 +1,19 @@
 ﻿const TOPICS = [
   {
     topic: "previsao/simepar",
-    label: "PrevisÃ£o Simepar DiÃ¡ria",
+    label: "Previsão Simepar Diária",
     url: "https://raspbpibucket.s3.us-east-1.amazonaws.com/dashboard/previsao_simepar.json",
     type: "simepar_daily",
   },
   {
     topic: "plugfield/forecast/daily",
-    label: "PrevisÃ£o Plugfield DiÃ¡ria",
+    label: "Previsão Plugfield Diária",
     url: "https://raspbpibucket.s3.us-east-1.amazonaws.com/dashboard/plugfield_forecast_daily.json",
     type: "plug_daily",
   },
   {
     topic: "plugfield/forecast/hourly",
-    label: "HistÃ³rico Plugfield DiÃ¡rio",
+    label: "Histórico Plugfield Diário",
     url: "https://raspbpibucket.s3.us-east-1.amazonaws.com/dashboard/plugfield_forecast_hourly.json",
     type: "plug_hourly",
   },
@@ -31,13 +31,13 @@
   },
   {
     topic: "irrigationRBS/schedule",
-    label: "IrrigaÃ§Ã£o RBS",
+    label: "Irrigação RBS",
     url: "https://raspbpibucket.s3.us-east-1.amazonaws.com/dashboard/irrigationRBS_schedule.json",
     type: "irrigation_rbs",
   },
   {
     topic: "irrigationRL/schedule",
-    label: "IrrigaÃ§Ã£o RL",
+    label: "Irrigação RL",
     url: "https://raspbpibucket.s3.us-east-1.amazonaws.com/dashboard/irrigationRL_schedule.json",
     type: "irrigation_rl",
   },
@@ -1043,7 +1043,7 @@ function renderPlugHourly(visualEl, dataRaw) {
   const listaHoras = filterPlugHourlyList(dataRaw);
 
   if (!listaHoras.length) {
-    visualEl.textContent = "Ainda nÃ£o hÃ¡ dados horÃ¡rios para o filtro selecionado.";
+    visualEl.textContent = "Ainda não há dados horários para o filtro selecionado.";
     return;
   }
 
@@ -1092,7 +1092,7 @@ function renderPlugHourly(visualEl, dataRaw) {
       createMiniTable(["Hora", "Temp (°C)", "Chuva (mm)", "Radiação"], rows)
     );
   } else {
-    wrapper.textContent = "Nenhum dado disponÃ­vel para exibiÃ§Ã£o.";
+    wrapper.textContent = "Nenhum dado disponível para exibição.";
   }
 
   visualEl.appendChild(title);
@@ -1323,7 +1323,7 @@ function buildCultureCard(cult) {
       const prefTimes = (norm.preferred_irrigation_times || [])
         .map(
           (t) =>
-            `${t.start_hour?.slice(0, 5) || "--:--"}â€“${
+            `${t.start_hour?.slice(0, 5) || "--:--"}–${
               t.end_hour?.slice(0, 5) || "--:--"
             }`
         )
@@ -1337,33 +1337,33 @@ function buildCultureCard(cult) {
         `${ph.duration_days || 0} dias`,
         `${norm.max_irrigations_per_day || "-"} irr/dia`,
         `${norm.maximum_volume_daily || "-"} mm/dia`,
-        `${norm.desired_humidity_minimum ?? "-"}â€“${
+        `${norm.desired_humidity_minimum ?? "-"}–${
           norm.desired_humidity_maximum ?? "-"
         }%`,
-        prefTimes || "â€”",
+        prefTimes || "-",
         highTemp.air_temperature_threshold !== undefined
-          ? `${highTemp.air_temperature_threshold} Â°C / ${
+          ? `${highTemp.air_temperature_threshold} °C / ${
               highTemp.duration_in_minutes || "-"
             } min`
-          : "â€”",
+          : "-",
         frost.start_temperature_threshold !== undefined
-          ? `${frost.start_temperature_threshold}â€“${
+          ? `${frost.start_temperature_threshold}–${
               frost.end_temperature_threshold
-            } Â°C`
-          : "â€”",
+            } °C`
+          : "-",
       ];
     });
 
     const table = createMiniTable(
       [
         "Fase",
-        "DuraÃ§Ã£o",
-        "MÃ¡x. irr/dia",
-        "Volume mÃ¡x (mm/dia)",
+        "Duração",
+        "Máx. irr/dia",
+        "Volume máx (mm/dia)",
         "Faixa umidade (%)",
-        "HorÃ¡rios preferenciais",
-        "IrrigaÃ§Ã£o alta TÂ°",
-        "IrrigaÃ§Ã£o geada",
+        "Horários preferenciais",
+        "Irrigação alta T°",
+        "Irrigação geada",
       ],
       rows
     );
@@ -1583,7 +1583,7 @@ function renderIrrigationRBS(visualEl, dataRaw) {
   }
 
   if (!array.length) {
-    visualEl.textContent = "Nenhum registro de irrigaÃ§Ã£o RBS disponÃ­vel.";
+    visualEl.textContent = "Nenhum registro de irrigação RBS disponível.";
     return;
   }
 
@@ -1599,8 +1599,8 @@ function renderIrrigationRBS(visualEl, dataRaw) {
 
   const chuvaReal = meteor.chuva_real_ate_agora_mm ?? meteor.Chuva_real_mm ?? 0;
   const chuvaPrev = meteor.chuva_prevista_hoje_mm ?? meteor.Chuva_prevista_mm ?? 0;
-  const faixaDesejada = "40.0â€“50.0";
-  const faseAtual = cultura.Fase_atual ?? "NÃ£o identificada";
+  const faixaDesejada = "40.0–50.0";
+  const faseAtual = cultura.Fase_atual ?? "Não identificada";
   const kcUtilizado = cultura.kc_utilizado ?? 1.0;
   const profundidadeRaiz = cultura.Profundidade_raiz_Z_cm ?? 20;
   const maxIrrigacoesDia = cultura.Max_irrigacoes_dia ?? 2;
@@ -1610,15 +1610,15 @@ function renderIrrigationRBS(visualEl, dataRaw) {
   gridTopo.className = "metric-grid";
 
   gridTopo.appendChild(createMetric("Data", data.Data ?? "-", "date"));
-  gridTopo.appendChild(createMetric("HorÃ¡rio", data.Horario ?? "-", "time"));
+  gridTopo.appendChild(createMetric("Horário", data.Horario ?? "-", "time"));
   gridTopo.appendChild(
     createMetric("Canteiro", data.CanteiroNome || `Canteiro ${data.Canteiro}` || "-", "rbs-main")
   );
   gridTopo.appendChild(
-    createMetric("Volume irrigaÃ§Ã£o (mm)", fmtNum(data.Volume_irrigacao, 2), "rbs-main")
+    createMetric("Volume irrigação (mm)", fmtNum(data.Volume_irrigacao, 2), "rbs-main")
   );
   gridTopo.appendChild(
-    createMetric("Tipo de estratÃ©gia", data.Tipo || "adaptativa_inteligente", "rbs-main")
+    createMetric("Tipo de estratégia", data.Tipo || "adaptativa_inteligente", "rbs-main")
   );
 
   const gridChuva = document.createElement("div");
@@ -1642,8 +1642,8 @@ function renderIrrigationRBS(visualEl, dataRaw) {
 
   gridCultura.appendChild(createMetric("Kc utilizado", fmtNum(kcUtilizado, 2), "rbs-context"));
   gridCultura.appendChild(createMetric("Profundidade raiz (cm)", profundidadeRaiz, "rbs-context"));
-  gridCultura.appendChild(createMetric("MÃ¡x irrigaÃ§Ãµes/dia", maxIrrigacoesDia, "rbs-context"));
-  gridCultura.appendChild(createMetric("MÃ¡x volume diÃ¡rio (mm)", fmtNum(maxVolumeDiario, 1), "rbs-context"));
+  gridCultura.appendChild(createMetric("Máx irrigações/dia", maxIrrigacoesDia, "rbs-context"));
+  gridCultura.appendChild(createMetric("Máx volume diário (mm)", fmtNum(maxVolumeDiario, 1), "rbs-context"));
 
   const justBox = document.createElement("div");
   justBox.className = "rbs-justification-box";
@@ -1656,7 +1656,7 @@ function renderIrrigationRBS(visualEl, dataRaw) {
   justBox.style.color = "#92400e";
 
   const justTitle = document.createElement("div");
-  justTitle.textContent = "Por que irrigar esse volume neste horÃ¡rio?";
+  justTitle.textContent = "Por que irrigar esse volume neste horário?";
   justTitle.style.fontWeight = "600";
   justTitle.style.marginBottom = "0.4rem";
 
@@ -1675,11 +1675,11 @@ const dataFormatada = formatDateBR(data.Data);
 const simeMap = buildSimeparDailyMap();
 const simeData = data.Data ? simeMap[data.Data] : null;
 const etoSimepar = simeData?.eto ?? null;
-const etoSimeparStr = etoSimepar !== null ? fmtNum(etoSimepar, 3) : "â€”";
+const etoSimeparStr = etoSimepar !== null ? fmtNum(etoSimepar, 3) : "-";
 
 // Buscar necessidade bruta diÃ¡ria dos detalhes
 const necessidadeBruta = meteor.necessidade_bruta_diaria_mm ?? detRoot.necessidade_bruta_diaria_mm ?? null;
-const necessidadeBrutaStr = necessidadeBruta !== null ? fmtNum(necessidadeBruta, 3) : "â€”";
+const necessidadeBrutaStr = necessidadeBruta !== null ? fmtNum(necessidadeBruta, 3) : "-";
 
 // Calcular fraÃ§Ã£o do dia baseado na hora
 const horaAtual = parseInt(hora.split(':')[0]) || 0;
@@ -1689,23 +1689,23 @@ const fracaoDiaStr = fmtNum(fracaoDia * 100, 1);
 
 if (data.Volume_irrigacao > 0) {
   justText.textContent =
-    `A estratÃ©gia RBS sugeriu irrigar ${volumeIrrigacao} mm no ${canteiro} Ã s ${hora}h ` +
-    `(${dataFormatada}). AtÃ© este horÃ¡rio (${fracaoDiaStr}% do dia), ` +
-    `foi detectada uma necessidade bruta diÃ¡ria de ${necessidadeBrutaStr} mm. ` +
+    `A estratégia RBS sugeriu irrigar ${volumeIrrigacao} mm no ${canteiro} às ${hora}h ` +
+    `(${dataFormatada}). Até este horário (${fracaoDiaStr}% do dia), ` +
+    `foi detectada uma necessidade bruta diária de ${necessidadeBrutaStr} mm. ` +
     `Com chuva real acumulada de ${fmtNum(chuvaReal, 2)} mm e ` +
     `chuva prevista de ${fmtNum(chuvaPrev, 2)} mm para o dia, ` +
-    `e considerando os limites operacionais (${maxIrrigacoesDia} irrigaÃ§Ãµes/dia, ` +
-    `${fmtNum(maxVolumeDiario, 1)} mm/dia mÃ¡ximo), ` +
-    `foi definida esta irrigaÃ§Ã£o para manter a umidade do solo na faixa desejada de ${faixaDesejada}%.`;
+    `e considerando os limites operacionais (${maxIrrigacoesDia} irrigações/dia, ` +
+    `${fmtNum(maxVolumeDiario, 1)} mm/dia máximo), ` +
+    `foi definida esta irrigação para manter a umidade do solo na faixa desejada de ${faixaDesejada}%.`;
 } else {
   justText.textContent =
-    `NÃ£o foi aplicada irrigaÃ§Ã£o neste horÃ¡rio (${hora}h, ${dataFormatada}). ` +
-    `Mesmo com necessidade bruta diÃ¡ria de ${necessidadeBrutaStr} mm, ` +
+    `Não foi aplicada irrigação neste horário (${hora}h, ${dataFormatada}). ` +
+    `Mesmo com necessidade bruta diária de ${necessidadeBrutaStr} mm, ` +
     `chuva real de ${fmtNum(chuvaReal, 2)} mm ` +
     `e prevista de ${fmtNum(chuvaPrev, 2)} mm, ` +
-    `a combinaÃ§Ã£o destes fatores com os limites operacionais ` +
-    `(${maxIrrigacoesDia} irrigaÃ§Ãµes/dia, ${fmtNum(maxVolumeDiario, 1)} mm/dia mÃ¡ximo) ` +
-    `indicou que nÃ£o era necessÃ¡rio adicionar lÃ¢mina extra neste momento ` +
+    `a combinação destes fatores com os limites operacionais ` +
+    `(${maxIrrigacoesDia} irrigações/dia, ${fmtNum(maxVolumeDiario, 1)} mm/dia máximo) ` +
+    `indicou que não era necessário adicionar lâmina extra neste momento ` +
     `para manter a faixa desejada de ${faixaDesejada}%.`;
 }
 }
@@ -1727,7 +1727,7 @@ function renderIrrigationRBS(visualEl, dataRaw) {
   }
 
   if (!array.length) {
-    visualEl.textContent = "Nenhum registro de irrigaÃ§Ã£o RBS disponÃ­vel.";
+    visualEl.textContent = "Nenhum registro de irrigação RBS disponível.";
     return;
   }
 
@@ -1746,7 +1746,7 @@ function renderIrrigationRBS(visualEl, dataRaw) {
                    detRoot["4_Analise_Meteorologica"]?.chuva_real_ate_agora_mm ?? 0;
   const chuvaPrev = meteor.chuva_prevista_hoje_mm ?? 
                    detRoot["4_Analise_Meteorologica"]?.chuva_prevista_hoje_mm ?? 0;
-  const faixaDesejada = "40.0â€“50.0";
+  const faixaDesejada = "40.0–50.0";
   const kcUtilizado = cultura.kc_utilizado ?? balancoHidrico.Kc_aplicado ?? 1.0; // <-- ATUALIZADO
   const profundidadeRaiz = cultura.Profundidade_raiz_Z_cm ?? 
                           detRoot["5_Controle_Diario"]?.profundidade_raiz_Z_cm ?? 20; // <-- ATUALIZADO
@@ -1760,15 +1760,15 @@ function renderIrrigationRBS(visualEl, dataRaw) {
   gridTopo.className = "metric-grid";
 
   gridTopo.appendChild(createMetric("Data", data.Data ?? "-", "date"));
-  gridTopo.appendChild(createMetric("HorÃ¡rio", data.Horario ?? "-", "time"));
+  gridTopo.appendChild(createMetric("Horário", data.Horario ?? "-", "time"));
   gridTopo.appendChild(
     createMetric("Canteiro", data.CanteiroNome || `Canteiro ${data.Canteiro}` || "-", "rbs-main")
   );
   gridTopo.appendChild(
-    createMetric("Volume irrigaÃ§Ã£o (mm)", fmtNum(data.Volume_irrigacao, 2), "rbs-main")
+    createMetric("Volume irrigação (mm)", fmtNum(data.Volume_irrigacao, 2), "rbs-main")
   );
   gridTopo.appendChild(
-    createMetric("Tipo de estratÃ©gia", data.Tipo || "adaptativa_inteligente", "rbs-main")
+    createMetric("Tipo de estratégia", data.Tipo || "adaptativa_inteligente", "rbs-main")
   );
 
   const gridChuva = document.createElement("div");
@@ -1792,8 +1792,8 @@ function renderIrrigationRBS(visualEl, dataRaw) {
 
   gridCultura.appendChild(createMetric("Kc utilizado", fmtNum(kcUtilizado, 2), "rbs-context"));
   gridCultura.appendChild(createMetric("Profundidade raiz (cm)", profundidadeRaiz, "rbs-context"));
-  gridCultura.appendChild(createMetric("MÃ¡x irrigaÃ§Ãµes/dia", maxIrrigacoesDia, "rbs-context"));
-  gridCultura.appendChild(createMetric("MÃ¡x volume diÃ¡rio (mm)", fmtNum(maxVolumeDiario, 1), "rbs-context"));
+  gridCultura.appendChild(createMetric("Máx irrigações/dia", maxIrrigacoesDia, "rbs-context"));
+  gridCultura.appendChild(createMetric("Máx volume diário (mm)", fmtNum(maxVolumeDiario, 1), "rbs-context"));
 
   const justBox = document.createElement("div");
   justBox.className = "rbs-justification-box";
@@ -1806,7 +1806,7 @@ function renderIrrigationRBS(visualEl, dataRaw) {
   justBox.style.color = "#92400e";
 
   const justTitle = document.createElement("div");
-  justTitle.textContent = "Por que irrigar esse volume neste horÃ¡rio?";
+  justTitle.textContent = "Por que irrigar esse volume neste horário?";
   justTitle.style.fontWeight = "600";
   justTitle.style.marginBottom = "0.4rem";
 
@@ -1826,27 +1826,27 @@ function renderIrrigationRBS(visualEl, dataRaw) {
   const fracaoDiaStr = fmtNum(fracaoDia * 100, 1);
 
   // Formatar necessidade bruta
-  const necessidadeBrutaStr = necessidadeBruta !== null ? fmtNum(necessidadeBruta, 3) : "â€”";
+  const necessidadeBrutaStr = necessidadeBruta !== null ? fmtNum(necessidadeBruta, 3) : "-";
 
   if (data.Volume_irrigacao > 0) {
     justText.textContent =
-      `A estratÃ©gia RBS sugeriu irrigar ${volumeIrrigacao} mm no ${canteiro} Ã s ${hora}h ` +
-      `(${dataFormatada}). AtÃ© este horÃ¡rio (${fracaoDiaStr}% do dia), ` +
-      `foi detectada uma necessidade bruta diÃ¡ria de ${necessidadeBrutaStr} mm. ` +
+      `A estratégia RBS sugeriu irrigar ${volumeIrrigacao} mm no ${canteiro} às ${hora}h ` +
+      `(${dataFormatada}). Até este horário (${fracaoDiaStr}% do dia), ` +
+      `foi detectada uma necessidade bruta diária de ${necessidadeBrutaStr} mm. ` +
       `Com chuva real acumulada de ${fmtNum(chuvaReal, 2)} mm e ` +
       `chuva prevista de ${fmtNum(chuvaPrev, 2)} mm para o dia, ` +
-      `e considerando os limites operacionais (${maxIrrigacoesDia} irrigaÃ§Ãµes/dia, ` +
-      `${fmtNum(maxVolumeDiario, 1)} mm/dia mÃ¡ximo), ` +
-      `foi definida esta irrigaÃ§Ã£o para manter a umidade do solo na faixa desejada de ${faixaDesejada}%.`;
+      `e considerando os limites operacionais (${maxIrrigacoesDia} irrigações/dia, ` +
+      `${fmtNum(maxVolumeDiario, 1)} mm/dia máximo), ` +
+      `foi definida esta irrigação para manter a umidade do solo na faixa desejada de ${faixaDesejada}%.`;
   } else {
     justText.textContent =
-      `NÃ£o foi aplicada irrigaÃ§Ã£o neste horÃ¡rio (${hora}h, ${dataFormatada}). ` +
-      `Mesmo com necessidade bruta diÃ¡ria de ${necessidadeBrutaStr} mm, ` +
+      `Não foi aplicada irrigação neste horário (${hora}h, ${dataFormatada}). ` +
+      `Mesmo com necessidade bruta diária de ${necessidadeBrutaStr} mm, ` +
       `chuva real de ${fmtNum(chuvaReal, 2)} mm ` +
       `e prevista de ${fmtNum(chuvaPrev, 2)} mm, ` +
-      `a combinaÃ§Ã£o destes fatores com os limites operacionais ` +
-      `(${maxIrrigacoesDia} irrigaÃ§Ãµes/dia, ${fmtNum(maxVolumeDiario, 1)} mm/dia mÃ¡ximo) ` +
-      `indicou que nÃ£o era necessÃ¡rio adicionar lÃ¢mina extra neste momento ` +
+      `a combinação destes fatores com os limites operacionais ` +
+      `(${maxIrrigacoesDia} irrigações/dia, ${fmtNum(maxVolumeDiario, 1)} mm/dia máximo) ` +
+      `indicou que não era necessário adicionar lâmina extra neste momento ` +
       `para manter a faixa desejada de ${faixaDesejada}%.`;
   }
 
@@ -1879,7 +1879,7 @@ function renderIrrigationRL(visualEl, dataRaw) {
   }
 
   if (!array.length) {
-    visualEl.textContent = "Nenhum registro de irrigaÃ§Ã£o RL disponÃ­vel.";
+    visualEl.textContent = "Nenhum registro de irrigação RL disponível.";
     return;
   }
 
@@ -1890,7 +1890,7 @@ function renderIrrigationRL(visualEl, dataRaw) {
   gridTopo.className = "metric-grid";
 
   gridTopo.appendChild(createMetric("Data", data.Data ?? "-", "date"));
-  gridTopo.appendChild(createMetric("HorÃ¡rio", data.Horario ?? "-", "time"));
+  gridTopo.appendChild(createMetric("Horário", data.Horario ?? "-", "time"));
   gridTopo.appendChild(
     createMetric("Canteiro", data.CanteiroNome || `Canteiro ${data.Canteiro}` || "-", "rbs-main")
   );
@@ -1901,7 +1901,7 @@ function renderIrrigationRL(visualEl, dataRaw) {
   const doseFinal = data.Volume_irrigacao ?? 0;
   const doseFinalStr = fmtNum(doseFinal, 2) + " mm";
   gridTopo.appendChild(
-    createMetric("Volume irrigaÃ§Ã£o (mm)", doseFinalStr, "rbs-main")
+    createMetric("Volume irrigação (mm)", doseFinalStr, "rbs-main")
   );
 
   const doseTotalDia = det.Dose_total_dia_mm ?? 0;
@@ -1920,7 +1920,7 @@ function renderIrrigationRL(visualEl, dataRaw) {
   motivoBox.style.color = "#4b5563";
 
   const motivoTitle = document.createElement("div");
-  motivoTitle.textContent = "Motivo da decisÃ£o";
+  motivoTitle.textContent = "Motivo da decisão";
   motivoTitle.style.fontWeight = "600";
   motivoTitle.style.marginBottom = "0.25rem";
 
@@ -1931,18 +1931,18 @@ function renderIrrigationRL(visualEl, dataRaw) {
   const reason = det.reason || "";
 
   const traducoes = {
-    "need_insignificant": "Necessidade de irrigaÃ§Ã£o insignificante",
-    "need_positive": "Necessidade de irrigaÃ§Ã£o detectada",
+    "need_insignificant": "Necessidade de irrigação insignificante",
+    "need_positive": "Necessidade de irrigação detectada",
     "soil_above_target": "Umidade do solo acima da faixa alvo",
     "soil_below_target": "Umidade do solo abaixo da faixa alvo",
-    "forecast_rain": "Chuva prevista para o perÃ­odo",
+    "forecast_rain": "Chuva prevista para o período",
     "high_temperature": "Temperatura elevada prevista",
-    "frost_protection": "ProteÃ§Ã£o contra geada",
-    "max_daily_limit": "Limite diÃ¡rio mÃ¡ximo atingido",
-    "no_data": "Dados insuficientes para decisÃ£o",
+    "frost_protection": "Proteção contra geada",
+    "max_daily_limit": "Limite diário máximo atingido",
+    "no_data": "Dados insuficientes para decisão",
     "sensor_failure": "Falha no sensor",
     "manual_override": "Controle manual ativado",
-    "maintenance": "Modo de manutenÃ§Ã£o"
+    "maintenance": "Modo de manutenção"
   };
 
   if (reason in traducoes) {
@@ -1977,7 +1977,7 @@ function renderIrrigationRL(visualEl, dataRaw) {
   );
 
   gridDetalhes.appendChild(
-    createMetric("MÃ¡x diÃ¡rio (mm)", fmtNum(det.MaxDaily_mm, 1), "rbs-context")
+    createMetric("Máx diário (mm)", fmtNum(det.MaxDaily_mm, 1), "rbs-context")
   );
 
   const fonteBox = document.createElement("div");
@@ -1992,13 +1992,13 @@ function renderIrrigationRL(visualEl, dataRaw) {
 
   const fonteEsq = document.createElement("div");
   fonteEsq.innerHTML = `
-    <div style="font-weight: 600;">Fonte previsÃ£o:</div>
+    <div style="font-weight: 600;">Fonte previsão:</div>
     <div>${det.Fonte_previsao || "-"}</div>
   `;
 
   const fonteDir = document.createElement("div");
   fonteDir.innerHTML = `
-    <div style="font-weight: 600;">Fonte irrigaÃ§Ã£o:</div>
+    <div style="font-weight: 600;">Fonte irrigação:</div>
     <div>${det.Fonte_irrigacao || "-"}</div>
   `;
 
@@ -2025,8 +2025,8 @@ function renderIrrigationRL(visualEl, dataRaw) {
   const metaDir = document.createElement("div");
   metaDir.style.textAlign = "right";
   metaDir.innerHTML = `
-    <div><strong>Sensor usado:</strong> ${det.sensor_used ? "Sim" : "NÃ£o"}</div>
-    <div><strong>Baseado em previsÃ£o:</strong> ${det.forecast_based ? "Sim" : "NÃ£o"}</div>
+    <div><strong>Sensor usado:</strong> ${det.sensor_used ? "Sim" : "Não"}</div>
+    <div><strong>Baseado em previsão:</strong> ${det.forecast_based ? "Sim" : "Não"}</div>
   `;
 
   metaBox.appendChild(metaEsq);
@@ -2157,18 +2157,18 @@ function updateDashboardFilterInfoText() {
 
   if (!date && !time) {
     infoEl.textContent =
-      "Mostrando os Ãºltimos valores disponÃ­veis de cada tÃ³pico no dashboard.";
+      "Mostrando os últimos valores disponíveis de cada tópico no dashboard.";
     return;
   }
 
   const parts = [];
   if (date) parts.push(`Data ${formatDateBR(date)}`);
-  if (time) parts.push(`HorÃ¡rio ${time}`);
+  if (time) parts.push(`Horário ${time}`);
 
   infoEl.textContent =
     "Filtro aplicado para todo o dashboard: " +
-    parts.join(" â€¢ ") +
-    ". Cada card mostra o registro mais prÃ³ximo disponÃ­vel.";
+    parts.join(" • ") +
+    ". Cada card mostra o registro mais próximo disponível.";
 }
 
 function applyGlobalFilterFromInputs() {
@@ -2236,7 +2236,7 @@ async function loadJsonForTopic(config) {
         } else {
           statusText.textContent = "Sem dados";
           visualEl.textContent =
-            "Ainda nÃ£o hÃ¡ JSON gerado para este tÃ³pico no S3.";
+            "Ainda não há JSON gerado para este tópico no S3.";
         }
         jsonEl.textContent = "";
         timeText.textContent = "--";
@@ -2381,7 +2381,7 @@ function updateHighlightFromRBS(rec) {
   
   const canteiro = rec.CanteiroNome || `Canteiro ${rec.Canteiro}` || "-";
 
-  info.textContent = `${formatDateBR(data)} Ã s ${hora} â€¢ ${canteiro} â€¢ ${vol} mm`;
+  info.textContent = `${formatDateBR(data)} às ${hora} • ${canteiro} • ${vol} mm`;
 
   const detRoot = rec.ExplicacaoDetalhada || rec.Detalhes || {};
   const meteor = detRoot["1_Meteorologia"] || detRoot || {};
@@ -2412,7 +2412,7 @@ function updateHighlightFromRBS(rec) {
   const parts = [];
 
   if (extra) {
-    extra.textContent = parts.length ? parts.join(" â€¢ ") : "";
+    extra.textContent = parts.length ? parts.join(" • ") : "";
   }
 }
 
@@ -2429,9 +2429,9 @@ function updateHighlightFromRL(rec, doseFinal, estadosResumo = {}) {
   const doseStr =
     typeof doseFinal === "number" && !Number.isNaN(doseFinal)
       ? doseFinal.toFixed(2) + " mm"
-      : String(doseFinal ?? "â€”");
+      : String(doseFinal ?? "-");
 
-  info.textContent = `${formatDateBR(data)} Ã s ${hora} â€¢ ${canteiro} â€¢ ${doseStr}`;
+  info.textContent = `${formatDateBR(data)} às ${hora} • ${canteiro} • ${doseStr}`;
 
   const det = rec.Detalhes || rec.ExplicacaoDetalhada || {};
   const etc = estadosResumo.etc ?? det.etc_mm_day ?? null;
@@ -2463,7 +2463,7 @@ function updateHighlightFromRL(rec, doseFinal, estadosResumo = {}) {
   const parts = [];
 
   if (extra) {
-    extra.textContent = parts.length ? parts.join(" â€¢ ") : "";
+    extra.textContent = parts.length ? parts.join(" • ") : "";
   }
 }
 
@@ -2485,7 +2485,7 @@ function loadHighlightsFromStorage() {
   if (lastRbs) updateHighlightFromRBS(lastRbs);
   else {
     const info = document.getElementById("highlightRbsInfo");
-    if (info) info.textContent = "Nenhuma decisÃ£o RBS salva ainda.";
+    if (info) info.textContent = "Nenhuma decisão RBS salva ainda.";
   }
 
   const lastRl = loadLastDecision("rl");
@@ -2501,7 +2501,7 @@ function loadHighlightsFromStorage() {
     updateHighlightFromRL(lastRl, doseFinal);
   } else {
     const info = document.getElementById("highlightRlInfo");
-    if (info) info.textContent = "Nenhuma decisÃ£o RL salva ainda.";
+    if (info) info.textContent = "Nenhuma decisão RL salva ainda.";
   }
 }
 
@@ -2566,7 +2566,7 @@ function renderIrrigationSummary(rows) {
 
   summarySection.innerHTML = `
     <div class="summary-section">
-      <h3>ðŸ“Š Resumo de IrrigaÃ§Ã£o</h3>
+      <h3>📊 Resumo de Irrigação</h3>
       
       <div class="season-totals">
         <h4>Total da Temporada</h4>
@@ -2596,7 +2596,7 @@ function renderIrrigationSummary(rows) {
       </div>
 
       <div class="daily-totals">
-        <h4>Totais por Dia (Ãºltimos ${
+        <h4>Totais por Dia (últimos ${
           Math.min(totals.daily.length, 7)
         } dias)</h4>
         <div class="daily-totals-table">
@@ -2834,8 +2834,8 @@ function applyHistoryFilters() {
   if (!filtered.length) {
     if (infoEl) {
       const plantingText = planting
-        ? ` para o plantio ${formatDateBR(planting.startDate)} atÃ© ${
-            planting.endDate ? formatDateBR(planting.endDate) : "â€”"
+        ? ` para o plantio ${formatDateBR(planting.startDate)} até ${
+            planting.endDate ? formatDateBR(planting.endDate) : "-"
           }`
         : "";
       infoEl.textContent = `Nenhum registro encontrado para os filtros selecionados${plantingText}.`;
@@ -2850,8 +2850,8 @@ function applyHistoryFilters() {
 
   if (infoEl) {
     const plantingText = planting
-      ? ` para o plantio ${formatDateBR(planting.startDate)} atÃ© ${
-          planting.endDate ? formatDateBR(planting.endDate) : "â€”"
+      ? ` para o plantio ${formatDateBR(planting.startDate)} até ${
+          planting.endDate ? formatDateBR(planting.endDate) : "-"
         }`
       : "";
     infoEl.textContent = `Mostrando ${filtered.length} registro(s) filtrado(s)${plantingText}.`;
@@ -2869,11 +2869,11 @@ function applyHistoryFilters() {
 
 function exportToExcel(rows, filename = "historico_irrigacao") {
   if (!rows.length) {
-    alert("NÃ£o hÃ¡ dados para exportar.");
+    alert("Não há dados para exportar.");
     return;
   }
 
-  const headers = ["Data", "HorÃ¡rio", "MÃ©todo", "Canteiro", "Volume (mm)"];
+  const headers = ["Data", "Horário", "Método", "Canteiro", "Volume (mm)"];
   
   const data = rows.map(row => [
     row.date ? formatDateBR(row.date) : "-",
@@ -3030,14 +3030,14 @@ function updateHistoryChart(rows) {
           borderWidth: 1,
         },
         {
-          label: "IrrigaÃ§Ã£o RBS (mm)",
+          label: "Irrigação RBS (mm)",
           data: rbsData,
           backgroundColor: "rgba(255, 99, 132, 0.6)",
           borderColor: "rgba(255, 99, 132, 1)",
           borderWidth: 1,
         },
         {
-          label: "IrrigaÃ§Ã£o RL (mm)",
+          label: "Irrigação RL (mm)",
           data: rlData,
           backgroundColor: "rgba(75, 192, 192, 0.6)",
           borderColor: "rgba(75, 192, 192, 1)",
