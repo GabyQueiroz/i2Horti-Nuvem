@@ -615,36 +615,36 @@ a {
 }
 
 .card-title::before {
-  content: "ðŸŒ±";
-  font-size: 1.1rem;
+  content: "";
+  font-size: 0;
 }
 
 .card[data-topic="previsao/simepar"] .card-title::before {
-  content: "â˜€ï¸";
+  content: "";
 }
 
 .card[data-topic="plugfield/forecast/daily"] .card-title::before {
-  content: "ðŸ“ˆ";
+  content: "";
 }
 
 .card[data-topic="plugfield/forecast/hourly"] .card-title::before {
-  content: "â±ï¸";
+  content: "";
 }
 
 .card[data-topic="canteiros/get"] .card-title::before {
-  content: "ðŸª´";
+  content: "";
 }
 
 .card[data-topic="cultures/get"] .card-title::before {
-  content: "ðŸŒ¿";
+  content: "";
 }
 
 .card[data-topic="irrigationRBS/schedule"] .card-title::before {
-  content: "ðŸ’§";
+  content: "";
 }
 
 .card[data-topic="irrigationRL/schedule"] .card-title::before {
-  content: "ðŸ¤–";
+  content: "";
 }
 
 .card-topic {
@@ -736,57 +736,57 @@ a {
 }
 
 .metric-label::before {
-  content: "ðŸ“Š";
-  font-size: 0.85rem;
+  content: "";
+  font-size: 0;
 }
 
 
 .metric-label.temp::before {
-  content: "ðŸŒ¡ï¸";
+  content: "";
 }
 
 .metric-label.rain::before {
-  content: "ðŸŒ§ï¸";
+  content: "";
 }
 
 .metric-label.eto::before {
-  content: "ðŸ’§";
+  content: "";
 }
 
 .metric-label.soil::before {
-  content: "ðŸª´";
+  content: "";
 }
 
 .metric-label.kc::before {
-  content: "ðŸŒ±";
+  content: "";
 }
 
 .metric-label.date::before {
-  content: "ðŸ“…";
+  content: "";
 }
 
 .metric-label.time::before {
-  content: "â°";
+  content: "";
 }
 
 .metric-label.air::before {
-  content: "ðŸ’¨";
+  content: "";
 }
 
 .metric-label.rbs-main::before {
-  content: "ðŸ’§";
+  content: "";
 }
 
 .metric-label.rbs-context::before {
-  content: "ðŸ“ˆ";
+  content: "";
 }
 
 .metric-label.rbs-soil::before {
-  content: "ðŸŒ±";
+  content: "";
 }
 
 .metric-label.rbs-phase::before {
-  content: "ðŸ“‹";
+  content: "";
 }
 
 .metric-value {
@@ -860,7 +860,7 @@ a {
 }
 
 .canteiro-name::before {
-  content: "ðŸ“";
+  content: "";
 }
 
 .canteiro-status {
@@ -1251,8 +1251,8 @@ a {
 }
 
 .summary-reload-btn::before {
-  content: "âŸ³";
-  font-size: 0.9rem;
+  content: "";
+  font-size: 0;
 }
 
 .summary-reload-btn:hover {
@@ -1302,8 +1302,8 @@ a {
 
 .planting-buttons-container button::before,
 .planting-buttons-container .planting-chip::before {
-  content: "ðŸŒ±";
-  font-size: 0.9rem;
+  content: "";
+  font-size: 0;
 }
 
 .planting-buttons-container button:hover,
@@ -1516,8 +1516,8 @@ a {
 }
 
 .planting-chip::before {
-  content: "ðŸŒ±";
-  font-size: 1rem;
+  content: "";
+  font-size: 0;
 }
 
 .planting-chip:hover {
