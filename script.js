@@ -872,13 +872,13 @@ function renderSimeparDaily(visualEl, dataRaw) {
   grid.className = "metric-grid";
 
   const dataPrev = data.DataPrevisao || data.data || data.Data || "-";
-  grid.appendChild(createMetric("Data previsÃ£o", dataPrev, "date"));
+  grid.appendChild(createMetric("Data previsão", dataPrev, "date"));
 
   grid.appendChild(
-    createMetric("T. MÃ¡x (Â°C)", data.leituraTemperaturaMax ?? "-", "temp")
+    createMetric("T. Máx (°C)", data.leituraTemperaturaMax ?? "-", "temp")
   );
   grid.appendChild(
-    createMetric("T. MÃ­n (Â°C)", data.leituraTemperaturaMin ?? "-", "temp")
+    createMetric("T. Mín (°C)", data.leituraTemperaturaMin ?? "-", "temp")
   );
   grid.appendChild(
     createMetric("Chuva (mm)", data.leituraPrecipitacao ?? "-", "rain")
@@ -949,9 +949,9 @@ function renderPlugDaily(visualEl, dataRaw) {
   grid.appendChild(createMetric("Data", dateBR, "date"));
 
   grid.appendChild(createMetric("Chuva (mm)", data.precipitacao_mm ?? "-", "rain"));
-  grid.appendChild(createMetric("T. MÃ¡x (Â°C)", data.temp_max ?? "-", "temp"));
-  grid.appendChild(createMetric("T. MÃ­n (Â°C)", data.temp_min ?? "-", "temp"));
-  grid.appendChild(createMetric("Umidade mÃ©dia do ar (%)", data.umidade_media ?? "-", "air"));
+  grid.appendChild(createMetric("T. Máx (°C)", data.temp_max ?? "-", "temp"));
+  grid.appendChild(createMetric("T. Mín (°C)", data.temp_min ?? "-", "temp"));
+  grid.appendChild(createMetric("Umidade média do ar (%)", data.umidade_media ?? "-", "air"));
 
   visualEl.appendChild(grid);
 }
@@ -1056,7 +1056,7 @@ function renderPlugHourly(visualEl, dataRaw) {
   const horasComDados = sorted.filter((item) => {
     const temp = item["Temperatura MÃ©d."];
     const chuva = item["Chuva"];
-    const rad = item["RadiaÃ§Ã£o"];
+    const rad = item["Radiação"];
 
     return (
       (temp !== undefined && temp !== null && temp !== "-" && temp !== "") ||
@@ -1073,7 +1073,7 @@ function renderPlugHourly(visualEl, dataRaw) {
     const hora = horaStr || dh;
     const t = item["Temperatura MÃ©d."] ?? "-";
     const chuva = item["Chuva"] ?? "-";
-    const rad = item["RadiaÃ§Ã£o"] ?? "-";
+    const rad = item["Radiação"] ?? "-";
     return [hora, t, chuva, rad];
   });
 
@@ -1081,7 +1081,7 @@ function renderPlugHourly(visualEl, dataRaw) {
   title.style.fontSize = "0.8rem";
   title.style.color = "#9ca3af";
   title.style.marginBottom = "0.35rem";
-  title.textContent = `Horas previstas (${rows.length} registros) - Temperatura / Chuva / RadiaÃ§Ã£o`;
+  title.textContent = `Horas previstas (${rows.length} registros) - Temperatura / Chuva / Radiação`;
 
   const wrapper = document.createElement("div");
   wrapper.style.maxHeight = "260px";
@@ -1089,7 +1089,7 @@ function renderPlugHourly(visualEl, dataRaw) {
 
   if (rows.length > 0) {
     wrapper.appendChild(
-      createMiniTable(["Hora", "Temp (Â°C)", "Chuva (mm)", "RadiaÃ§Ã£o"], rows)
+      createMiniTable(["Hora", "Temp (°C)", "Chuva (mm)", "Radiação"], rows)
     );
   } else {
     wrapper.textContent = "Nenhum dado disponÃ­vel para exibiÃ§Ã£o.";
