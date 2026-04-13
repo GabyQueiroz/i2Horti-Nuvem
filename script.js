@@ -572,6 +572,59 @@ function getDashboardUrlCandidates(config) {
   return [...new Set(candidates)];
 }
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function shouldRetryForStrictUcDashboard(config) {
+  return Boolean(
+    getStrictUcIdForCurrentFarm() &&
+      (config.topic === "previsao/simepar" ||
+        config.topic === "plugfield/forecast/daily" ||
+        config.topic === "plugfield/forecast/hourly")
+  );
+}
+
+async function fetchDashboardDataForCurrentFarm(config) {
+  const urlCandidates = getDashboardUrlCandidates(config);
+  let lastHttpStatus = null;
+  let data = null;
+  const retryPasses = shouldRetryForStrictUcDashboard(config) ? 6 : 1;
+
+  for (let attempt = 0; attempt < retryPasses; attempt += 1) {
+    for (const candidate of urlCandidates) {
+      const url = `${candidate}?t=${Date.now()}`;
+      const response = await fetch(url);
+
+      if (response.status === 404 || response.status === 403) {
+        lastHttpStatus = response.status;
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const responseData = await response.json();
+      data = filterDataForCurrentFarm(responseData);
+
+      if (
+        data !== null &&
+        data !== undefined &&
+        (!Array.isArray(data) || data.length > 0)
+      ) {
+        return { data, lastHttpStatus };
+      }
+    }
+
+    if (attempt < retryPasses - 1) {
+      await delay(2500);
+    }
+  }
+
+  return { data, lastHttpStatus };
+}
+
 function getTodayIsoDateLocal() {
   const now = new Date();
   const year = now.getFullYear();
