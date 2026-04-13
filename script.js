@@ -471,6 +471,22 @@ function getBucketRootFromConfig(config) {
   }
 }
 
+function getDashboardUrlCandidates(config) {
+  const candidates = [];
+  const strictUcId = getStrictUcIdForCurrentFarm();
+  const bucketRoot = getBucketRootFromConfig(config);
+  const historyKey = getHistoryKeyFromConfig(config);
+
+  if (strictUcId && bucketRoot && historyKey) {
+    candidates.push(`${bucketRoot}/${historyKey}_uc${strictUcId}.json`);
+    candidates.push(`${bucketRoot}/${historyKey}_${strictUcId}.json`);
+  }
+
+  candidates.push(config.url);
+
+  return [...new Set(candidates)];
+}
+
 async function fetchHistoryJsonForDate(config, isoDate) {
   if (!isoDate) return null;
 
@@ -2226,28 +2242,53 @@ async function loadJsonForTopic(config) {
     }
 
     if (!data && !usedHistorySource) {
-      const url = `${config.url}?t=${Date.now()}`;
-      const response = await fetch(url);
+      const urlCandidates = getDashboardUrlCandidates(config);
+      let lastHttpStatus = null;
 
-      if (response.status === 404) {
-        if (isPassiveTopic(config.topic)) {
-          statusText.textContent = "Aguardando";
-          visualEl.textContent = "Aguardando dados deste tÃ³pico.";
-        } else {
-          statusText.textContent = "Sem dados";
-          visualEl.textContent =
-            "Ainda não há JSON gerado para este tópico no S3.";
+      for (const candidate of urlCandidates) {
+        const url = `${candidate}?t=${Date.now()}`;
+        const response = await fetch(url);
+
+        if (response.status === 404 || response.status === 403) {
+          lastHttpStatus = response.status;
+          continue;
         }
-        jsonEl.textContent = "";
-        timeText.textContent = "--";
-        return;
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const responseData = await response.json();
+        data = filterDataForCurrentFarm(responseData);
+
+        if (
+          data !== null &&
+          data !== undefined &&
+          (!Array.isArray(data) || data.length > 0)
+        ) {
+          break;
+        }
       }
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+      if (
+        data === null ||
+        data === undefined ||
+        (Array.isArray(data) && data.length === 0)
+      ) {
+        if (lastHttpStatus === 404 || lastHttpStatus === 403) {
+          if (isPassiveTopic(config.topic)) {
+            statusText.textContent = "Aguardando";
+            visualEl.textContent = "Aguardando dados deste tópico.";
+          } else {
+            statusText.textContent = "Sem dados";
+            visualEl.textContent =
+              "Ainda não há JSON público gerado para este tópico no S3.";
+          }
+          jsonEl.textContent = "";
+          timeText.textContent = "--";
+          return;
+        }
       }
-
-      data = filterDataForCurrentFarm(await response.json());
     }
 
     if (
