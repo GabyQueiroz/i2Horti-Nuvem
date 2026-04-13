@@ -155,6 +155,91 @@ function resetFarmDataState() {
   if (histTimeStart) histTimeStart.value = "";
   if (histTimeEnd) histTimeEnd.value = "";
   if (histMethod) histMethod.value = "all";
+
+  loadHistoricalCache();
+}
+
+function getFarmStoragePrefix() {
+  return `i2horti_${currentFarm}`;
+}
+
+function sanitizeStorageKeyPart(value) {
+  return String(value || "")
+    .replace(/[^a-zA-Z0-9_-]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function buildFarmStorageKey(kind) {
+  return `${getFarmStoragePrefix()}_${sanitizeStorageKeyPart(kind)}`;
+}
+
+function saveFarmData(kind, value) {
+  try {
+    localStorage.setItem(buildFarmStorageKey(kind), JSON.stringify(value));
+  } catch (e) {
+    console.warn("Não foi possível salvar em localStorage:", e);
+  }
+}
+
+function loadFarmData(kind) {
+  try {
+    const raw = localStorage.getItem(buildFarmStorageKey(kind));
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveDashboardCache(topic, data) {
+  saveFarmData(`dashboard_${topic}`, data);
+}
+
+function loadDashboardCache(topic) {
+  return loadFarmData(`dashboard_${topic}`);
+}
+
+function saveHistoricalCache() {
+  saveFarmData("historical_cache", {
+    irrigationRBS: historicalData.irrigationRBS || [],
+    irrigationRL: historicalData.irrigationRL || [],
+    savedAt: new Date().toISOString(),
+  });
+}
+
+function loadHistoricalCache() {
+  const cached = loadFarmData("historical_cache");
+  if (!cached || typeof cached !== "object") return false;
+
+  historicalData.irrigationRBS = Array.isArray(cached.irrigationRBS)
+    ? cached.irrigationRBS
+    : [];
+  historicalData.irrigationRL = Array.isArray(cached.irrigationRL)
+    ? cached.irrigationRL
+    : [];
+  historicalData.loaded =
+    historicalData.irrigationRBS.length > 0 || historicalData.irrigationRL.length > 0;
+
+  return historicalData.loaded;
+}
+
+function mergeRecordsByIdentity(target, records) {
+  let changed = false;
+  (records || []).forEach((newItem) => {
+    const exists = target.some(
+      (existingItem) =>
+        existingItem.Data === newItem.Data &&
+        existingItem.Horario === newItem.Horario &&
+        existingItem.Canteiro === newItem.Canteiro &&
+        String(existingItem.Volume_irrigacao ?? existingItem.volume_mm ?? "") ===
+          String(newItem.Volume_irrigacao ?? newItem.volume_mm ?? "")
+    );
+    if (!exists) {
+      target.push(newItem);
+      changed = true;
+    }
+  });
+  return changed;
 }
 
 function fixMojibakeText(value) {
@@ -775,6 +860,7 @@ async function loadCompleteHistoricalData() {
   if (!historicalData.loaded) {
     historicalData.irrigationRBS = [];
     historicalData.irrigationRL = [];
+    loadHistoricalCache();
   }
 
   // ALTERAÃ‡ÃƒO: Data inicial modificada para 15/01/2026
@@ -798,17 +884,7 @@ async function loadCompleteHistoricalData() {
       );
       
       if (data && Array.isArray(data)) {
-        data.forEach((newItem) => {
-          const exists = historicalData.irrigationRBS.some(
-            (existingItem) =>
-              existingItem.Data === newItem.Data &&
-              existingItem.Horario === newItem.Horario &&
-              existingItem.Canteiro === newItem.Canteiro
-          );
-          if (!exists) {
-            historicalData.irrigationRBS.push(newItem);
-          }
-        });
+        mergeRecordsByIdentity(historicalData.irrigationRBS, data);
         console.log(`âœ“ RBS - ${date}: ${data.length} registros`);
       }
     } catch (error) {
@@ -825,17 +901,7 @@ async function loadCompleteHistoricalData() {
       );
       
       if (data && Array.isArray(data)) {
-        data.forEach((newItem) => {
-          const exists = historicalData.irrigationRL.some(
-            (existingItem) =>
-              existingItem.Data === newItem.Data &&
-              existingItem.Horario === newItem.Horario &&
-              existingItem.Canteiro === newItem.Canteiro
-          );
-          if (!exists) {
-            historicalData.irrigationRL.push(newItem);
-          }
-        });
+        mergeRecordsByIdentity(historicalData.irrigationRL, data);
         console.log(`âœ“ RL - ${date}: ${data.length} registros`);
       }
     } catch (error) {
@@ -844,6 +910,7 @@ async function loadCompleteHistoricalData() {
   }
 
   historicalData.loaded = true;
+  saveHistoricalCache();
 
   console.log("âœ… Dados histÃ³ricos carregados:", {
     RBS: historicalData.irrigationRBS.length,
@@ -2399,6 +2466,18 @@ async function loadJsonForTopic(config) {
       data === undefined ||
       (Array.isArray(data) && data.length === 0)
     ) {
+      const cachedTopicData = loadDashboardCache(config.topic);
+      if (cachedTopicData) {
+        dashboardData[config.topic] = cachedTopicData;
+        renderVisual(config, visualEl, cachedTopicData);
+        jsonEl.textContent = JSON.stringify(cachedTopicData, null, 2);
+        statusDot.classList.add("online");
+        statusText.textContent = "Cache local";
+        timeText.textContent = "--";
+        repairVisibleText(card);
+        return;
+      }
+
       statusText.textContent = "Sem dados";
       visualEl.textContent = `Nenhum dado disponivel para a UC ${getCurrentFarmConfig().ucId}.`;
       jsonEl.textContent = "";
@@ -2406,9 +2485,24 @@ async function loadJsonForTopic(config) {
       return;
     }
 
-    const pretty = JSON.stringify(data, null, 2);
-
     dashboardData[config.topic] = data;
+    saveDashboardCache(config.topic, data);
+
+    if (config.topic === "irrigationRBS/schedule" && Array.isArray(data) && data.length > 0) {
+      if (mergeRecordsByIdentity(historicalData.irrigationRBS, data)) {
+        historicalData.loaded = true;
+        saveHistoricalCache();
+      }
+    }
+
+    if (config.topic === "irrigationRL/schedule" && Array.isArray(data) && data.length > 0) {
+      if (mergeRecordsByIdentity(historicalData.irrigationRL, data)) {
+        historicalData.loaded = true;
+        saveHistoricalCache();
+      }
+    }
+
+    const pretty = JSON.stringify(data, null, 2);
 
     if (config.topic === "cultures/get") {
       syncPlantingFiltersFromDashboard();
@@ -2443,15 +2537,35 @@ async function loadJsonForTopic(config) {
         "NÃ£o foi possÃ­vel carregar o JSON (verifique se o arquivo existe no S3, se hÃ¡ histÃ³rico para a data e se o bucket permite acesso pÃºblico).";
     }
 
-    if (currentFarm === "doisvizinhos" && config.topic === "irrigationRBS/schedule") {
+    const cachedTopicData = loadDashboardCache(config.topic);
+    if (cachedTopicData) {
+      dashboardData[config.topic] = cachedTopicData;
+      renderVisual(config, visualEl, cachedTopicData);
+      jsonEl.textContent = JSON.stringify(cachedTopicData, null, 2);
+      statusDot.classList.add("online");
+      statusText.textContent = "Cache local";
+      timeText.textContent = "--";
+      repairVisibleText(card);
+      return;
+    }
+
+    if (config.topic === "irrigationRBS/schedule") {
       const last = loadLastDecision("rbs");
       if (last && visualEl) {
         renderIrrigationRBS(visualEl, [last]);
+        statusDot.classList.add("online");
+        statusText.textContent = "Cache local";
+        timeText.textContent = "--";
+        return;
       }
-    } else if (currentFarm === "doisvizinhos" && config.topic === "irrigationRL/schedule") {
+    } else if (config.topic === "irrigationRL/schedule") {
       const last = loadLastDecision("rl");
       if (last && visualEl) {
         renderIrrigationRL(visualEl, [last]);
+        statusDot.classList.add("online");
+        statusText.textContent = "Cache local";
+        timeText.textContent = "--";
+        return;
       }
     }
   }
@@ -2497,21 +2611,23 @@ function disableAutoRefresh() {
 // ===============================
 
 function saveLastDecision(kind, obj) {
-  try {
-    localStorage.setItem(`i2horti_last_${kind}`, JSON.stringify(obj));
-  } catch (e) {
-    console.warn("NÃ£o foi possÃ­vel salvar em localStorage:", e);
+  saveFarmData(`last_${kind}`, obj);
+
+  if (kind === "rbs") {
+    if (mergeRecordsByIdentity(historicalData.irrigationRBS, [obj])) {
+      historicalData.loaded = true;
+      saveHistoricalCache();
+    }
+  } else if (kind === "rl") {
+    if (mergeRecordsByIdentity(historicalData.irrigationRL, [obj])) {
+      historicalData.loaded = true;
+      saveHistoricalCache();
+    }
   }
 }
 
 function loadLastDecision(kind) {
-  try {
-    const raw = localStorage.getItem(`i2horti_last_${kind}`);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch (e) {
-    return null;
-  }
+  return loadFarmData(`last_${kind}`);
 }
 
 function updateHighlightFromRBS(rec) {
@@ -2612,24 +2728,11 @@ function updateHighlightFromRL(rec, doseFinal, estadosResumo = {}) {
 }
 
 function loadHighlightsFromStorage() {
-  if (currentFarm !== "doisvizinhos") {
-    const rbsInfo = document.getElementById("highlightRbsInfo");
-    const rlInfo = document.getElementById("highlightRlInfo");
-    const rbsExtra = document.getElementById("highlightRbsExtra");
-    const rlExtra = document.getElementById("highlightRlExtra");
-
-    if (rbsInfo) rbsInfo.textContent = "Nenhuma decisao RBS disponivel para esta UC.";
-    if (rlInfo) rlInfo.textContent = "Nenhuma decisao RL disponivel para esta UC.";
-    if (rbsExtra) rbsExtra.textContent = "";
-    if (rlExtra) rlExtra.textContent = "";
-    return;
-  }
-
   const lastRbs = loadLastDecision("rbs");
   if (lastRbs) updateHighlightFromRBS(lastRbs);
   else {
     const info = document.getElementById("highlightRbsInfo");
-    if (info) info.textContent = "Nenhuma decisão RBS salva ainda.";
+    if (info) info.textContent = `Nenhuma decisão RBS salva ainda para a UC ${getCurrentFarmConfig().ucId}.`;
   }
 
   const lastRl = loadLastDecision("rl");
@@ -2645,7 +2748,7 @@ function loadHighlightsFromStorage() {
     updateHighlightFromRL(lastRl, doseFinal);
   } else {
     const info = document.getElementById("highlightRlInfo");
-    if (info) info.textContent = "Nenhuma decisão RL salva ainda.";
+    if (info) info.textContent = `Nenhuma decisão RL salva ainda para a UC ${getCurrentFarmConfig().ucId}.`;
   }
 }
 
