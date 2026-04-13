@@ -487,6 +487,83 @@ function getDashboardUrlCandidates(config) {
   return [...new Set(candidates)];
 }
 
+function getTodayIsoDateLocal() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeUcExecutionRecords(dataArray, irrigationType, isoDate) {
+  if (!Array.isArray(dataArray)) return [];
+
+  return dataArray
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+
+      const publishedAt = item.data_hora_publicacao || item.timestamp_s3 || null;
+      const publishedDate = publishedAt
+        ? normalizeToIsoDateString(String(publishedAt))
+        : isoDate || null;
+      const rawTime = item.horario || item.Horario || "00:00";
+
+      return {
+        UC_id: item.uc_id ?? item.UC_id ?? null,
+        Data: publishedDate,
+        Horario: String(rawTime).slice(0, 5),
+        HorarioOriginal: rawTime,
+        Canteiro: item.canteiro ?? item.Canteiro ?? null,
+        CanteiroNome:
+          item.canteiro !== undefined || item.Canteiro !== undefined
+            ? `Canteiro ${item.canteiro ?? item.Canteiro}`
+            : "-",
+        Volume_irrigacao: item.volume_mm ?? item.Volume_irrigacao ?? 0,
+        Tipo: irrigationType === "rl" ? "RL" : "RBS",
+        ExplicacaoDetalhada: item.ExplicacaoDetalhada || {},
+        Detalhes: item.Detalhes || {},
+        timestamp: item.timestamp_s3 || null,
+        HorarioPublicacao: publishedAt,
+      };
+    })
+    .filter((item) => item !== null);
+}
+
+async function fetchUcExecutionJson(config, isoDate) {
+  const strictUcId = getStrictUcIdForCurrentFarm();
+  const historyKey = getHistoryKeyFromConfig(config);
+  if (!strictUcId || !historyKey || !isoDate) return null;
+
+  if (
+    config.topic !== "irrigationRBS/schedule" &&
+    config.topic !== "irrigationRL/schedule"
+  ) {
+    return null;
+  }
+
+  const parts = isoDate.split("-");
+  if (parts.length !== 3) return null;
+
+  const [year, month, day] = parts;
+  const url =
+    `https://raspbpibucket.s3.us-east-1.amazonaws.com/` +
+    `Irrigacoes_Decisoes/${historyKey}/UC_${strictUcId}/${year}/${month}/${day}/executions.json?t=${Date.now()}`;
+
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+
+    const data = await resp.json();
+    const irrigationType = config.topic === "irrigationRL/schedule" ? "rl" : "rbs";
+    return filterDataForCurrentFarm(
+      normalizeUcExecutionRecords(data, irrigationType, isoDate)
+    );
+  } catch (e) {
+    console.error("Erro ao buscar histórico por UC no S3:", e);
+    return null;
+  }
+}
+
 async function fetchHistoryJsonForDate(config, isoDate) {
   if (!isoDate) return null;
 
@@ -504,15 +581,31 @@ async function fetchHistoryJsonForDate(config, isoDate) {
     try {
       const resp = await fetch(url);
       if (!resp.ok) {
+        const ucData = await fetchUcExecutionJson(config, isoDate);
+        if (ucData && Array.isArray(ucData) && ucData.length > 0) {
+          return ucData;
+        }
         console.warn(`HistÃ³rico nÃ£o encontrado para ${config.topic} em ${isoDate}: HTTP ${resp.status}`);
         return null;
       }
       const data = await resp.json();
       
       if (config.topic === "irrigationRBS/schedule") {
-        return filterDataForCurrentFarm(extractIrrigationDataFromNewFormat(data, "rbs"));
+        const normalized = filterDataForCurrentFarm(
+          extractIrrigationDataFromNewFormat(data, "rbs")
+        );
+        if (normalized && Array.isArray(normalized) && normalized.length > 0) {
+          return normalized;
+        }
+        return await fetchUcExecutionJson(config, isoDate);
       } else if (config.topic === "irrigationRL/schedule") {
-        return filterDataForCurrentFarm(extractIrrigationDataFromNewFormat(data, "rl"));
+        const normalized = filterDataForCurrentFarm(
+          extractIrrigationDataFromNewFormat(data, "rl")
+        );
+        if (normalized && Array.isArray(normalized) && normalized.length > 0) {
+          return normalized;
+        }
+        return await fetchUcExecutionJson(config, isoDate);
       }
       
       return filterDataForCurrentFarm(data);
@@ -2268,6 +2361,16 @@ async function loadJsonForTopic(config) {
         ) {
           break;
         }
+      }
+
+      if (
+        (data === null ||
+          data === undefined ||
+          (Array.isArray(data) && data.length === 0)) &&
+        (config.topic === "irrigationRBS/schedule" ||
+          config.topic === "irrigationRL/schedule")
+      ) {
+        data = await fetchUcExecutionJson(config, getTodayIsoDateLocal());
       }
 
       if (
