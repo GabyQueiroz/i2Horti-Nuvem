@@ -1,4 +1,4 @@
-﻿const TOPICS = [
+const TOPICS = [
   {
     topic: "previsao/simepar",
     label: "Previsão Simepar Diária",
@@ -83,16 +83,22 @@ const dashboardData = {
 const historicalData = {
   irrigationRBS: [],
   irrigationRL: [],
+  sensorReadings: [],
+  sensorDatesLoaded: {},
   loaded: false,
 };
 
 let plantingFilters = [];
 let currentPlantingId = null;
 let historyChart = null;
+let lastRenderedHistoryRows = [];
+let lastRenderedHistoryMode = "irrigation";
 let autoRefreshInterval = null;
 let dashboardInitialized = false;
 let currentFarm = "doisvizinhos";
 let activeFarmOnDashboard = null;
+const activeTopicLoads = new Set();
+const strictUcTopicSamplers = new Map();
 
 function getCurrentFarmConfig() {
   return FARM_CONFIG[currentFarm] || FARM_CONFIG.doisvizinhos;
@@ -100,6 +106,14 @@ function getCurrentFarmConfig() {
 
 function getStrictUcIdForCurrentFarm() {
   return getCurrentFarmConfig().strictUcId || null;
+}
+
+function getTargetUcIdForCurrentFarm() {
+  return getStrictUcIdForCurrentFarm() || getCurrentFarmConfig().ucId || null;
+}
+
+function getTopicLoadKey(config) {
+  return `${currentFarm}:${config.topic}`;
 }
 
 function getRecordUcId(record) {
@@ -135,10 +149,14 @@ function resetFarmDataState() {
 
   historicalData.irrigationRBS = [];
   historicalData.irrigationRL = [];
+  historicalData.sensorReadings = [];
+  historicalData.sensorDatesLoaded = {};
   historicalData.loaded = false;
 
   plantingFilters = [];
   currentPlantingId = null;
+  lastRenderedHistoryRows = [];
+  lastRenderedHistoryMode = "irrigation";
 
   const globalDate = document.getElementById("globalFilterDate");
   const globalTime = document.getElementById("globalFilterTime");
@@ -147,6 +165,7 @@ function resetFarmDataState() {
   const histTimeStart = document.getElementById("histTimeStart");
   const histTimeEnd = document.getElementById("histTimeEnd");
   const histMethod = document.getElementById("histMethod");
+  const histSensorId = document.getElementById("histSensorId");
 
   if (globalDate) globalDate.value = "";
   if (globalTime) globalTime.value = "";
@@ -155,6 +174,7 @@ function resetFarmDataState() {
   if (histTimeStart) histTimeStart.value = "";
   if (histTimeEnd) histTimeEnd.value = "";
   if (histMethod) histMethod.value = "all";
+  if (histSensorId) histSensorId.value = "all";
 
   loadHistoricalCache();
 }
@@ -221,6 +241,11 @@ function loadHistoricalCache() {
     historicalData.irrigationRBS.length > 0 || historicalData.irrigationRL.length > 0;
 
   return historicalData.loaded;
+}
+
+function resetSensorHistoryCache() {
+  historicalData.sensorReadings = [];
+  historicalData.sensorDatesLoaded = {};
 }
 
 function mergeRecordsByIdentity(target, records) {
@@ -437,6 +462,218 @@ function normalizeToIsoDateString(raw) {
   return null;
 }
 
+function parseJsonMaybeNested(rawText) {
+  try {
+    const parsed = JSON.parse(rawText);
+    if (typeof parsed === "string") {
+      return JSON.parse(parsed);
+    }
+    return parsed;
+  } catch (e) {
+    return null;
+  }
+}
+
+function parseSensorKeyToDateTime(key) {
+  if (!key) return { date: null, time: null, isoDateTime: null };
+  const fileName = String(key).split("/").pop() || "";
+  const match = fileName.match(
+    /^(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})\.json$/i
+  );
+  if (!match) return { date: null, time: null, isoDateTime: null };
+  const [, date, hh, mm, ss] = match;
+  return {
+    date,
+    time: `${hh}:${mm}`,
+    isoDateTime: `${date}T${hh}:${mm}:${ss}`,
+  };
+}
+
+async function listS3KeysByPrefix(prefix) {
+  const keys = [];
+  let continuationToken = null;
+
+  do {
+    const url = new URL("https://raspbpibucket.s3.us-east-1.amazonaws.com/");
+    url.searchParams.set("list-type", "2");
+    url.searchParams.set("prefix", prefix);
+    url.searchParams.set("max-keys", "1000");
+    if (continuationToken) {
+      url.searchParams.set("continuation-token", continuationToken);
+    }
+
+    const response = await fetch(url.toString());
+    if (!response.ok) {
+      throw new Error(`Falha ao listar objetos S3: HTTP ${response.status}`);
+    }
+
+    const xmlText = await response.text();
+    const xml = new DOMParser().parseFromString(xmlText, "application/xml");
+
+    xml.querySelectorAll("Contents > Key").forEach((node) => {
+      const value = node.textContent?.trim();
+      if (value) keys.push(value);
+    });
+
+    const nextTokenNode = xml.querySelector("NextContinuationToken");
+    continuationToken = nextTokenNode?.textContent?.trim() || null;
+  } while (continuationToken);
+
+  return keys;
+}
+
+function normalizeSensorRecord(canteiro, sourceInfo = {}) {
+  if (!canteiro || typeof canteiro !== "object") return null;
+
+  const parsedKey = sourceInfo.sourceKey
+    ? parseSensorKeyToDateTime(sourceInfo.sourceKey)
+    : {
+        date: sourceInfo.date || null,
+        time: sourceInfo.time || null,
+        isoDateTime: sourceInfo.isoDateTime || null,
+      };
+  if (!parsedKey.date || !parsedKey.time) return null;
+
+  const sensorId = canteiro.id ?? null;
+  if (sensorId === null || sensorId === undefined) return null;
+
+  return {
+    sourceKey:
+      sourceInfo.sourceKey ||
+      `${parsedKey.date}T${parsedKey.time}:${String(sensorId).padStart(2, "0")}`,
+    date: parsedKey.date,
+    time: parsedKey.time,
+    method: "SENSOR",
+    sensorId: String(sensorId),
+    sensorName: canteiro.name || `Canteiro ${sensorId}`,
+    culture: canteiro.culture?.name || "-",
+    status: canteiro.status || "-",
+    soilHumidity:
+      canteiro.soil_humidity !== undefined && canteiro.soil_humidity !== null
+        ? Number(canteiro.soil_humidity)
+        : null,
+    soilTemperature:
+      canteiro.soil_temperature !== undefined &&
+      canteiro.soil_temperature !== null
+        ? Number(canteiro.soil_temperature)
+        : null,
+    airHumidity:
+      canteiro.air_humitidy !== undefined && canteiro.air_humitidy !== null
+        ? Number(canteiro.air_humitidy)
+        : null,
+    airTemperature:
+      canteiro.air_temperature !== undefined && canteiro.air_temperature !== null
+        ? Number(canteiro.air_temperature)
+        : null,
+    cloudTimestamp: parsedKey.isoDateTime,
+    sensorTimestamp: canteiro.timestamp || null,
+  };
+}
+
+function mergeSensorRecords(target, records) {
+  let changed = false;
+  (records || []).forEach((newItem) => {
+    if (!newItem) return;
+    const exists = target.some(
+      (existingItem) =>
+        existingItem.sourceKey === newItem.sourceKey &&
+        existingItem.sensorId === newItem.sensorId
+    );
+    if (!exists) {
+      target.push(newItem);
+      changed = true;
+    }
+  });
+  return changed;
+}
+
+async function fetchSensorHistoryForDate(isoDate) {
+  if (!isoDate) return [];
+
+  const [year, month, day] = isoDate.split("-");
+  const url =
+    `https://raspbpibucket.s3.us-east-1.amazonaws.com/dashboard/history/canteiros_get/` +
+    `${year}/${month}/${day}/${year}${month}${day}.json?t=${Date.now()}`;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      if (response.status === 404) return [];
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const snapshots = await response.json();
+    if (!Array.isArray(snapshots)) return [];
+
+    const targetUcId = String(getTargetUcIdForCurrentFarm() || "");
+    const rows = [];
+
+    snapshots.forEach((snapshot) => {
+      if (!snapshot || typeof snapshot !== "object") return;
+      if (String(snapshot.UC_id ?? "") !== targetUcId) return;
+
+      const localTimestamp =
+        snapshot._metadata?.received_at_local ||
+        snapshot._metadata?.received_at_utc ||
+        null;
+      const normalizedDate = normalizeToIsoDateString(localTimestamp) || isoDate;
+      const parsedDate = parseIsoToDate(localTimestamp);
+      const normalizedTime = parsedDate
+        ? parsedDate.toLocaleTimeString("pt-BR", {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          })
+        : "00:00";
+
+      const info = {
+        date: normalizedDate,
+        time: normalizedTime,
+        isoDateTime: localTimestamp,
+      };
+
+      const canteiros = Array.isArray(snapshot.data) ? snapshot.data : [];
+      canteiros.forEach((canteiro) => {
+        const row = normalizeSensorRecord(canteiro, info);
+        if (row) rows.push(row);
+      });
+    });
+
+    rows.sort((a, b) => {
+      const dateCompare = (a.date || "").localeCompare(b.date || "");
+      if (dateCompare !== 0) return dateCompare;
+      const timeCompare = (a.time || "").localeCompare(b.time || "");
+      if (timeCompare !== 0) return timeCompare;
+      return (a.sensorId || "").localeCompare(b.sensorId || "");
+    });
+
+    return rows;
+  } catch (e) {
+    console.error("Falha ao carregar histórico diário consolidado de sensores:", e);
+    return [];
+  }
+}
+
+async function ensureSensorHistoryForRange(startDate, endDate) {
+  const dates = [];
+  const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
+  const end = endDate ? new Date(`${endDate}T00:00:00`) : null;
+  if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return;
+  }
+
+  for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
+    dates.push(date.toISOString().split("T")[0]);
+  }
+
+  for (const isoDate of dates) {
+    if (historicalData.sensorDatesLoaded[isoDate]) continue;
+    const rows = await fetchSensorHistoryForDate(isoDate);
+    mergeSensorRecords(historicalData.sensorReadings, rows);
+    historicalData.sensorDatesLoaded[isoDate] = true;
+  }
+}
+
 function extractIrrigationDataFromNewFormat(dataArray, irrigationType) {
   if (!Array.isArray(dataArray)) return [];
   
@@ -583,6 +820,38 @@ function shouldRetryForStrictUcDashboard(config) {
         config.topic === "plugfield/forecast/daily" ||
         config.topic === "plugfield/forecast/hourly")
   );
+}
+
+function shouldUseStrictUcLiveSampler(config) {
+  return Boolean(
+    getStrictUcIdForCurrentFarm() && config.topic === "previsao/simepar"
+  );
+}
+
+function stopStrictUcTopicSampler(config) {
+  const key = getTopicLoadKey(config);
+  const timer = strictUcTopicSamplers.get(key);
+  if (timer) {
+    clearInterval(timer);
+    strictUcTopicSamplers.delete(key);
+  }
+}
+
+function ensureStrictUcTopicSampler(config) {
+  if (!shouldUseStrictUcLiveSampler(config)) return;
+
+  const key = getTopicLoadKey(config);
+  if (strictUcTopicSamplers.has(key)) return;
+
+  const timer = setInterval(() => {
+    if (currentFarm !== "miringuava-luciane") {
+      stopStrictUcTopicSampler(config);
+      return;
+    }
+    loadJsonForTopic(config);
+  }, 8000);
+
+  strictUcTopicSamplers.set(key, timer);
 }
 
 async function fetchDashboardDataForCurrentFarm(config) {
@@ -2433,6 +2702,10 @@ async function loadJsonForTopic(config) {
   const card = document.querySelector(`.card[data-topic="${config.topic}"]`);
   if (!card) return;
 
+  const loadKey = getTopicLoadKey(config);
+  if (activeTopicLoads.has(loadKey)) return;
+  activeTopicLoads.add(loadKey);
+
   const statusDot = card.querySelector(".dot-status");
   const statusText = card.querySelector(".status-text");
   const timeText = card.querySelector(".time-text");
@@ -2528,6 +2801,7 @@ async function loadJsonForTopic(config) {
         statusText.textContent = "Cache local";
         timeText.textContent = "--";
         repairVisibleText(card);
+        ensureStrictUcTopicSampler(config);
         return;
       }
 
@@ -2535,6 +2809,7 @@ async function loadJsonForTopic(config) {
       visualEl.textContent = `Nenhum dado disponivel para a UC ${getCurrentFarmConfig().ucId}.`;
       jsonEl.textContent = "";
       timeText.textContent = "--";
+      ensureStrictUcTopicSampler(config);
       return;
     }
 
@@ -2567,6 +2842,7 @@ async function loadJsonForTopic(config) {
 
     statusDot.classList.add("online");
     statusText.textContent = "OK";
+    ensureStrictUcTopicSampler(config);
 
     const now = new Date();
     timeText.textContent = now.toLocaleTimeString("pt-BR", {
@@ -2599,6 +2875,7 @@ async function loadJsonForTopic(config) {
       statusText.textContent = "Cache local";
       timeText.textContent = "--";
       repairVisibleText(card);
+      ensureStrictUcTopicSampler(config);
       return;
     }
 
@@ -2621,6 +2898,8 @@ async function loadJsonForTopic(config) {
         return;
       }
     }
+  } finally {
+    activeTopicLoads.delete(loadKey);
   }
 }
 
@@ -2935,6 +3214,18 @@ function renderIrrigationSummary(rows) {
 // HISTÃ“RICO (TABELA + GRÃFICO)
 // ===============================
 
+function buildSensorHistoryRows() {
+  const rows = [...(historicalData.sensorReadings || [])];
+  rows.sort((a, b) => {
+    const dateCompare = (a.date || "").localeCompare(b.date || "");
+    if (dateCompare !== 0) return dateCompare;
+    const timeCompare = (a.time || "").localeCompare(b.time || "");
+    if (timeCompare !== 0) return timeCompare;
+    return (a.sensorId || "").localeCompare(b.sensorId || "");
+  });
+  return rows;
+}
+
 function buildHistoryRows() {
   const simeMap = buildSimeparDailyMap();
   const rows = [];
@@ -3025,7 +3316,102 @@ function buildHistoryRows() {
   return rows;
 }
 
-function renderHistoryTable(rows) {
+function setHistoryTableMode(mode) {
+  const tableHead = document.getElementById("historyTableHead");
+  const chartSection = document.querySelector(".history-chart-section");
+  const summarySection = document.getElementById("irrigationSummary");
+  const plantingSection = document.querySelector(".planting-selector-section");
+  const sensorWrapper = document.getElementById("histSensorIdWrapper");
+  const chartTitle = document.getElementById("historyChartTitle");
+  const chartSubtitle = document.getElementById("historyChartSubtitle");
+  const tableTitle = document.getElementById("historyTableTitle");
+  const headerDescription = document.getElementById("historyHeaderDescription");
+
+  if (sensorWrapper) sensorWrapper.hidden = mode !== "sensor";
+
+  if (mode === "sensor") {
+    if (tableHead) {
+      tableHead.innerHTML = `
+        <tr>
+          <th>Data</th>
+          <th>Horário</th>
+          <th>ID do sensor</th>
+          <th>Nome</th>
+          <th>Cultura</th>
+          <th>Status</th>
+          <th>Umidade solo (%)</th>
+          <th>Temp. solo (°C)</th>
+          <th>Umidade ar (%)</th>
+          <th>Temp. ar (°C)</th>
+        </tr>
+      `;
+    }
+    if (chartSection) chartSection.style.display = "none";
+    if (summarySection) summarySection.style.display = "none";
+    if (plantingSection) plantingSection.style.display = "none";
+    if (tableTitle) tableTitle.textContent = "Registros históricos dos sensores";
+    if (headerDescription) {
+      headerDescription.textContent =
+        "Consulte os snapshots históricos de canteiros/get filtrando por data, horário e ID do sensor.";
+    }
+  } else {
+    if (tableHead) {
+      tableHead.innerHTML = `
+        <tr>
+          <th>Data</th>
+          <th>Horario</th>
+          <th>Metodo</th>
+          <th>Canteiro</th>
+          <th>Volume (mm)</th>
+        </tr>
+      `;
+    }
+    if (chartSection) chartSection.style.display = "";
+    if (summarySection) summarySection.style.display = "";
+    if (plantingSection) plantingSection.style.display = "";
+    if (chartTitle) chartTitle.textContent = "Gráfico de lâminas de irrigação (RBS x RL)";
+    if (chartSubtitle) {
+      chartSubtitle.textContent =
+        "Cada barra representa a lâmina diária acumulada por método. Passe o mouse para ver os valores exatos.";
+    }
+    if (tableTitle) tableTitle.textContent = "Registros filtrados";
+    if (headerDescription) {
+      headerDescription.textContent =
+        "Explore decisões de irrigação e dados históricos dos sensores, filtrando por data, horário e ID do sensor.";
+    }
+  }
+}
+
+function populateSensorIdOptions(rows = []) {
+  const select = document.getElementById("histSensorId");
+  if (!select) return;
+
+  const previousValue = select.value || "all";
+  const sensorMap = new Map();
+
+  rows.forEach((row) => {
+    if (!row?.sensorId) return;
+    sensorMap.set(String(row.sensorId), row.sensorName || `Canteiro ${row.sensorId}`);
+  });
+
+  select.innerHTML = `<option value="all">Todos os sensores</option>`;
+  [...sensorMap.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }))
+    .forEach(([id, name]) => {
+      const option = document.createElement("option");
+      option.value = id;
+      option.textContent = `ID ${id} - ${name}`;
+      select.appendChild(option);
+    });
+
+  if ([...sensorMap.keys()].includes(previousValue)) {
+    select.value = previousValue;
+  } else {
+    select.value = "all";
+  }
+}
+
+function renderHistoryTable(rows, mode = "irrigation") {
   const tableBody = document.getElementById("historyTableBody");
   if (!tableBody) return;
 
@@ -3041,18 +3427,33 @@ function renderHistoryTable(rows) {
       tr.style.borderLeft = "4px solid #3b82f6";
     }
 
-    tr.innerHTML = `
-      <td>${r.date ? formatDateBR(r.date) : "-"}</td>
-      <td>${r.time || "--:--"}</td>
-      <td>${r.method}</td>
-      <td>${r.canteiro || "â€”"}</td>
-      <td>${r.volume != null ? fmtNum(r.volume, 2) : "â€”"}</td>
-    `;
+    if (mode === "sensor") {
+      tr.innerHTML = `
+        <td>${r.date ? formatDateBR(r.date) : "-"}</td>
+        <td>${r.time || "--:--"}</td>
+        <td>${r.sensorId || "-"}</td>
+        <td>${r.sensorName || "-"}</td>
+        <td>${r.culture || "-"}</td>
+        <td>${r.status || "-"}</td>
+        <td>${r.soilHumidity != null ? fmtNum(r.soilHumidity, 2) : "—"}</td>
+        <td>${r.soilTemperature != null ? fmtNum(r.soilTemperature, 2) : "—"}</td>
+        <td>${r.airHumidity != null ? fmtNum(r.airHumidity, 2) : "—"}</td>
+        <td>${r.airTemperature != null ? fmtNum(r.airTemperature, 2) : "—"}</td>
+      `;
+    } else {
+      tr.innerHTML = `
+        <td>${r.date ? formatDateBR(r.date) : "-"}</td>
+        <td>${r.time || "--:--"}</td>
+        <td>${r.method}</td>
+        <td>${r.canteiro || "—"}</td>
+        <td>${r.volume != null ? fmtNum(r.volume, 2) : "—"}</td>
+      `;
+    }
     tableBody.appendChild(tr);
   });
 }
 
-function applyHistoryFilters() {
+async function applyHistoryFilters() {
   const infoEl = document.getElementById("histInfo");
   const tableBody = document.getElementById("historyTableBody");
   if (!tableBody) return;
@@ -3067,17 +3468,40 @@ function applyHistoryFilters() {
   const endDate = endDateInput?.value || null;
   const startTime = startTimeInput?.value || null;
   const endTime = endTimeInput?.value || null;
+  const sensorFilter = document.getElementById("histSensorId")?.value || "all";
+  const isSensorMode = methodFilter === "sensor";
 
-  const baseRows = buildHistoryRows();
+  if (isSensorMode && !startDate && !endDate) {
+    const today = getTodayIsoDateLocal();
+    if (startDateInput) startDateInput.value = today;
+    if (endDateInput) endDateInput.value = today;
+  }
+
+  setHistoryTableMode(isSensorMode ? "sensor" : "irrigation");
+
+  if (isSensorMode) {
+    const effectiveStart = startDateInput?.value || getTodayIsoDateLocal();
+    const effectiveEnd = endDateInput?.value || effectiveStart;
+    if (infoEl) {
+      infoEl.textContent = "Carregando histórico de sensores do S3...";
+    }
+    await ensureSensorHistoryForRange(effectiveStart, effectiveEnd);
+    populateSensorIdOptions(buildSensorHistoryRows());
+  }
+
+  const baseRows = isSensorMode ? buildSensorHistoryRows() : buildHistoryRows();
 
   if (!baseRows.length) {
     if (infoEl) {
-      infoEl.textContent =
-        currentFarm === "miringuava-luciane"
-          ? `Ainda não há histórico disponível na AWS para a UC ${getCurrentFarmConfig().ucId}.`
-          : "Ainda não há dados de histórico carregados.";
+      infoEl.textContent = isSensorMode
+        ? `Ainda não há snapshots de sensores disponíveis na AWS para a UC ${getCurrentFarmConfig().ucId}.`
+        : currentFarm === "miringuava-luciane"
+            ? `Ainda não há histórico disponível na AWS para a UC ${getCurrentFarmConfig().ucId}.`
+            : "Ainda não há dados de histórico carregados.";
     }
     tableBody.innerHTML = "";
+    lastRenderedHistoryRows = [];
+    lastRenderedHistoryMode = isSensorMode ? "sensor" : "irrigation";
     updateHistoryChart([]);
     const summarySection = document.getElementById("irrigationSummary");
     if (summarySection) summarySection.innerHTML = "";
@@ -3087,7 +3511,7 @@ function applyHistoryFilters() {
 
   let filtered = baseRows;
 
-  const planting = getCurrentPlantingFilter();
+  const planting = isSensorMode ? null : getCurrentPlantingFilter();
   if (planting) {
     const pStart = planting.startDate || null;
     const pEnd = planting.endDate || null;
@@ -3104,6 +3528,8 @@ function applyHistoryFilters() {
     filtered = filtered.filter((r) => r.method === "RBS");
   } else if (methodFilter === "rl") {
     filtered = filtered.filter((r) => r.method === "RL");
+  } else if (isSensorMode && sensorFilter !== "all") {
+    filtered = filtered.filter((r) => String(r.sensorId) === String(sensorFilter));
   }
 
   if (startDate) {
@@ -3133,14 +3559,17 @@ function applyHistoryFilters() {
 
   if (!filtered.length) {
     if (infoEl) {
-      const plantingText = planting
-        ? ` para o plantio ${formatDateBR(planting.startDate)} até ${
-            planting.endDate ? formatDateBR(planting.endDate) : "-"
-          }`
-        : "";
+      const plantingText =
+        !isSensorMode && planting
+          ? ` para o plantio ${formatDateBR(planting.startDate)} até ${
+              planting.endDate ? formatDateBR(planting.endDate) : "-"
+            }`
+          : "";
       infoEl.textContent = `Nenhum registro encontrado para os filtros selecionados${plantingText}.`;
     }
     tableBody.innerHTML = "";
+    lastRenderedHistoryRows = [];
+    lastRenderedHistoryMode = isSensorMode ? "sensor" : "irrigation";
     updateHistoryChart([]);
     const summarySection = document.getElementById("irrigationSummary");
     if (summarySection) summarySection.innerHTML = "";
@@ -3149,17 +3578,28 @@ function applyHistoryFilters() {
   }
 
   if (infoEl) {
-    const plantingText = planting
-      ? ` para o plantio ${formatDateBR(planting.startDate)} até ${
-          planting.endDate ? formatDateBR(planting.endDate) : "-"
-        }`
-      : "";
-    infoEl.textContent = `Mostrando ${filtered.length} registro(s) filtrado(s)${plantingText}.`;
+    const plantingText =
+      !isSensorMode && planting
+        ? ` para o plantio ${formatDateBR(planting.startDate)} até ${
+            planting.endDate ? formatDateBR(planting.endDate) : "-"
+          }`
+        : "";
+    infoEl.textContent = isSensorMode
+      ? `Mostrando ${filtered.length} snapshot(s) de sensores${sensorFilter !== "all" ? ` para o ID ${sensorFilter}` : ""}.`
+      : `Mostrando ${filtered.length} registro(s) filtrado(s)${plantingText}.`;
   }
 
-  renderHistoryTable(filtered);
-  updateHistoryChart(filtered);
-  renderIrrigationSummary(filtered);
+  lastRenderedHistoryRows = filtered;
+  lastRenderedHistoryMode = isSensorMode ? "sensor" : "irrigation";
+  renderHistoryTable(filtered, isSensorMode ? "sensor" : "irrigation");
+  if (isSensorMode) {
+    updateHistoryChart([]);
+    const summarySection = document.getElementById("irrigationSummary");
+    if (summarySection) summarySection.innerHTML = "";
+  } else {
+    updateHistoryChart(filtered);
+    renderIrrigationSummary(filtered);
+  }
   repairVisibleText();
 }
 
@@ -3173,15 +3613,42 @@ function exportToExcel(rows, filename = "historico_irrigacao") {
     return;
   }
 
-  const headers = ["Data", "Horário", "Método", "Canteiro", "Volume (mm)"];
-  
-  const data = rows.map(row => [
-    row.date ? formatDateBR(row.date) : "-",
-    row.time || "--:--",
-    row.method,
-    row.canteiro || "-",
-    row.volume != null ? fmtNum(row.volume, 2) : "â€”"
-  ]);
+  const isSensorMode = lastRenderedHistoryMode === "sensor";
+  const headers = isSensorMode
+    ? [
+        "Data",
+        "Horário",
+        "ID do sensor",
+        "Nome",
+        "Cultura",
+        "Status",
+        "Umidade solo (%)",
+        "Temp. solo (°C)",
+        "Umidade ar (%)",
+        "Temp. ar (°C)",
+      ]
+    : ["Data", "Horário", "Método", "Canteiro", "Volume (mm)"];
+
+  const data = isSensorMode
+    ? rows.map((row) => [
+        row.date ? formatDateBR(row.date) : "-",
+        row.time || "--:--",
+        row.sensorId || "-",
+        row.sensorName || "-",
+        row.culture || "-",
+        row.status || "-",
+        row.soilHumidity != null ? fmtNum(row.soilHumidity, 2) : "—",
+        row.soilTemperature != null ? fmtNum(row.soilTemperature, 2) : "—",
+        row.airHumidity != null ? fmtNum(row.airHumidity, 2) : "—",
+        row.airTemperature != null ? fmtNum(row.airTemperature, 2) : "—",
+      ])
+    : rows.map((row) => [
+        row.date ? formatDateBR(row.date) : "-",
+        row.time || "--:--",
+        row.method,
+        row.canteiro || "-",
+        row.volume != null ? fmtNum(row.volume, 2) : "—",
+      ]);
 
   let csvContent = "data:text/csv;charset=utf-8,";
   csvContent += headers.join(";") + "\r\n";
@@ -3205,15 +3672,17 @@ function applyHistoryFiltersToRows(allRows) {
   const startTimeInput = document.getElementById("histTimeStart");
   const endTimeInput = document.getElementById("histTimeEnd");
   const methodFilter = document.getElementById("histMethod")?.value || "all";
+  const sensorFilter = document.getElementById("histSensorId")?.value || "all";
 
   const startDate = startDateInput?.value || null;
   const endDate = endDateInput?.value || null;
   const startTime = startTimeInput?.value || null;
   const endTime = endTimeInput?.value || null;
+  const isSensorMode = methodFilter === "sensor";
 
   let filtered = allRows;
 
-  const planting = getCurrentPlantingFilter();
+  const planting = isSensorMode ? null : getCurrentPlantingFilter();
   if (planting) {
     const pStart = planting.startDate || null;
     const pEnd = planting.endDate || null;
@@ -3230,6 +3699,8 @@ function applyHistoryFiltersToRows(allRows) {
     filtered = filtered.filter((r) => r.method === "RBS");
   } else if (methodFilter === "rl") {
     filtered = filtered.filter((r) => r.method === "RL");
+  } else if (isSensorMode && sensorFilter !== "all") {
+    filtered = filtered.filter((r) => String(r.sensorId) === String(sensorFilter));
   }
 
   if (startDate) {
@@ -3266,12 +3737,14 @@ function clearHistoryFilters() {
   const startTimeInput = document.getElementById("histTimeStart");
   const endTimeInput = document.getElementById("histTimeEnd");
   const methodSel = document.getElementById("histMethod");
+  const sensorSel = document.getElementById("histSensorId");
 
   if (startDateInput) startDateInput.value = "";
   if (endDateInput) endDateInput.value = "";
   if (startTimeInput) startTimeInput.value = "";
   if (endTimeInput) endTimeInput.value = "";
   if (methodSel) methodSel.value = "all";
+  if (sensorSel) sensorSel.value = "all";
 
   applyHistoryFilters();
 }
@@ -3416,7 +3889,13 @@ function addReloadHistoryButton() {
     reloadButton.textContent = "Carregando...";
     reloadButton.disabled = true;
 
-    loadCompleteHistoricalData().finally(() => {
+    const methodFilter = document.getElementById("histMethod")?.value || "all";
+    const task =
+      methodFilter === "sensor"
+        ? (resetSensorHistoryCache(), applyHistoryFilters())
+        : loadCompleteHistoricalData();
+
+    Promise.resolve(task).finally(() => {
       reloadButton.textContent = "Recarregar dados históricos";
       reloadButton.disabled = false;
     });
@@ -3459,17 +3938,17 @@ function addExportButton() {
   exportButton.style.transition = "all 0.15s ease";
 
   exportButton.addEventListener("click", () => {
-    const rows = buildHistoryRows();
-    const filteredRows = applyHistoryFiltersToRows(rows);
-    
-    const planting = getCurrentPlantingFilter();
-    let filename = "historico_irrigacao";
-    
+    const rows = lastRenderedHistoryRows || [];
+    const methodFilter = document.getElementById("histMethod")?.value || "all";
+    const planting = methodFilter === "sensor" ? null : getCurrentPlantingFilter();
+    let filename =
+      methodFilter === "sensor" ? "historico_sensores" : "historico_irrigacao";
+
     if (planting) {
       filename = `historico_plantio_${planting.startDate}_${planting.endDate || "atual"}`;
     }
-    
-    exportToExcel(filteredRows, filename);
+
+    exportToExcel(rows, filename);
   });
 
   exportButton.addEventListener("mouseenter", () => {
@@ -3571,12 +4050,14 @@ function initDashboard() {
   const histTimeStart = document.getElementById("histTimeStart");
   const histTimeEnd = document.getElementById("histTimeEnd");
   const histMethod = document.getElementById("histMethod");
+  const histSensorId = document.getElementById("histSensorId");
 
   if (histDateStart) histDateStart.addEventListener("change", applyHistoryFilters);
   if (histDateEnd) histDateEnd.addEventListener("change", applyHistoryFilters);
   if (histTimeStart) histTimeStart.addEventListener("change", applyHistoryFilters);
   if (histTimeEnd) histTimeEnd.addEventListener("change", applyHistoryFilters);
   if (histMethod) histMethod.addEventListener("change", applyHistoryFilters);
+  if (histSensorId) histSensorId.addEventListener("change", applyHistoryFilters);
 
   syncPlantingFiltersFromDashboard();
 }

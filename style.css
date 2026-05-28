@@ -1,4 +1,4 @@
-﻿*::before,
+*::before,
 *::after {
   box-sizing: border-box;
   margin: 0;
@@ -1193,6 +1193,20 @@ a {
 
 .history-table tbody tr:hover {
   background: #f3f4f6;
+}
+
+.history-sensor-filter {
+  min-width: 190px;
+}
+
+.history-sensor-filter[hidden] {
+  display: none !important;
+}
+
+.history-mode-note {
+  margin-top: 0.5rem;
+  color: #64748b;
+  font-size: 0.82rem;
 }
 
 /* =========================

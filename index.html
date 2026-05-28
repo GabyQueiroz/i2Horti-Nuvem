@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
@@ -222,9 +222,9 @@
         <header class="history-header">
           <div>
             <h2>Histórico de Irrigações e Previsões</h2>
-            <p>
-              Explore todas as decisões RBS e RL, filtre por data/horário
-              e visualize um gráfico comparativo das irrigações.
+            <p id="historyHeaderDescription">
+              Explore decisões de irrigação e dados históricos dos sensores,
+              filtrando por data, horário e ID do sensor.
             </p>
           </div>
         </header>
@@ -273,6 +273,13 @@
                 <option value="all">RBS + RL</option>
                 <option value="rbs">Somente RBS</option>
                 <option value="rl">Somente RL</option>
+                <option value="sensor">Sensores (canteiros/get)</option>
+              </select>
+            </label>
+            <label id="histSensorIdWrapper" class="history-sensor-filter" hidden>
+              ID do sensor
+              <select id="histSensorId">
+                <option value="all">Todos os sensores</option>
               </select>
             </label>
           </div>
@@ -286,8 +293,8 @@
         </section>
 
         <section class="history-chart-section">
-          <h3>Gráfico de lâminas de irrigação (RBS x RL)</h3>
-          <p class="history-chart-subtitle">
+          <h3 id="historyChartTitle">Gráfico de lâminas de irrigação (RBS x RL)</h3>
+          <p id="historyChartSubtitle" class="history-chart-subtitle">
             Cada barra representa a lâmina diária acumulada por método.
             Passe o mouse para ver os valores exatos.
           </p>
@@ -297,10 +304,10 @@
         </section>
 
         <section class="history-table-section">
-          <h3>Registros filtrados</h3>
+          <h3 id="historyTableTitle">Registros filtrados</h3>
           <div class="history-table-wrapper">
             <table class="history-table">
-              <thead>
+              <thead id="historyTableHead">
                 <tr>
                   <th>Data</th>
                   <th>Horario</th>
