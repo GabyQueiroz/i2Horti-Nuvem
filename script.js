@@ -118,15 +118,66 @@ function getTopicLoadKey(config) {
 
 function getRecordUcId(record) {
   if (!record || typeof record !== "object") return null;
-  return record.UC_id ?? record.data?.UC_id ?? null;
+  return (
+    record.UC_id ??
+    record.uc_id ??
+    record.UC ??
+    record.uc ??
+    record.payload?.UC_id ??
+    record.payload?.uc_id ??
+    record.data?.UC_id ??
+    record.data?.uc_id ??
+    record.data?.payload?.UC_id ??
+    null
+  );
+}
+
+function unwrapTopicPayload(record) {
+  if (!record || typeof record !== "object") return record;
+  if (record.payload && typeof record.payload === "object") return record.payload;
+  if (
+    record.data &&
+    typeof record.data === "object" &&
+    (record.topic || record.timestamp || record._metadata)
+  ) {
+    return record.data;
+  }
+  return record;
+}
+
+function getRecordTimestamp(record) {
+  if (!record || typeof record !== "object") return "";
+  return (
+    record._metadata?.received_at_local ||
+    record._metadata?.received_at_utc ||
+    record.timestamp_s3 ||
+    record.timestamp ||
+    record.HorarioPublicacao ||
+    record.data_hora_publicacao ||
+    record.Meta?.publish_local ||
+    record.Meta?.publish_utc ||
+    record.data?._metadata?.received_at_local ||
+    record.data?._metadata?.received_at_utc ||
+    record.data?.timestamp_s3 ||
+    record.data?.timestamp ||
+    record.data?.HorarioPublicacao ||
+    record.data?.Meta?.publish_local ||
+    ""
+  );
+}
+
+function sortRecordsByRecency(records) {
+  return [...(records || [])].sort((a, b) =>
+    String(getRecordTimestamp(a)).localeCompare(String(getRecordTimestamp(b)))
+  );
 }
 
 function filterDataForCurrentFarm(data) {
-  const strictUcId = getStrictUcIdForCurrentFarm();
-  if (!strictUcId) return data;
+  const targetUcId = getTargetUcIdForCurrentFarm();
+  if (!targetUcId) return data;
 
   if (Array.isArray(data)) {
-    return data.filter((item) => String(getRecordUcId(item) ?? "") === strictUcId);
+    return data.filter((item) => String(getRecordUcId(item) ?? "") === String(targetUcId));
   }
 
   const ucId = getRecordUcId(data);
@@ -134,7 +185,35 @@ function filterDataForCurrentFarm(data) {
     return null;
   }
 
-  return String(ucId) === strictUcId ? data : null;
+  return String(ucId) === String(targetUcId) ? data : null;
+}
+
+function normalizeLiveDataForTopic(config, rawData) {
+  const targetUcId = getTargetUcIdForCurrentFarm();
+  const filtered = filterDataForCurrentFarm(rawData);
+
+  if (filtered === null || filtered === undefined) return filtered;
+
+  if (Array.isArray(filtered)) {
+    const sorted = sortRecordsByRecency(filtered);
+
+    if (
+      config.topic === "irrigationRBS/schedule" ||
+      config.topic === "irrigationRL/schedule"
+    ) {
+      return sorted.map(unwrapTopicPayload);
+    }
+
+    const latest = sorted[sorted.length - 1];
+    return unwrapTopicPayload(latest);
+  }
+
+  const unwrapped = unwrapTopicPayload(filtered);
+  if (!targetUcId) return unwrapped;
+
+  const ucId = getRecordUcId(unwrapped);
+  if (ucId === null || ucId === undefined) return unwrapped;
+  return String(ucId) === String(targetUcId) ? unwrapped : null;
 }
 
 function resetFarmDataState() {
@@ -684,6 +763,7 @@ function extractIrrigationDataFromNewFormat(dataArray, irrigationType) {
     
     if (irrigationType === 'rbs') {
       return {
+        UC_id: data.UC_id ?? item.UC_id ?? null,
         Data: data.Data,
         Horario: data.Horario ? data.Horario.split(':').slice(0, 2).join(':') : "00:00",
         HorarioOriginal: data.Horario,
@@ -697,6 +777,7 @@ function extractIrrigationDataFromNewFormat(dataArray, irrigationType) {
       };
     } else if (irrigationType === 'rl') {
       return {
+        UC_id: data.UC_id ?? item.UC_id ?? null,
         Data: data.Data,
         Horario: data.Horario ? data.Horario.split(':').slice(0, 2).join(':') : "00:00",
         HorarioOriginal: data.Horario,
@@ -799,9 +880,10 @@ function getDashboardUrlCandidates(config) {
   const bucketRoot = getBucketRootFromConfig(config);
   const historyKey = getHistoryKeyFromConfig(config);
 
-  if (strictUcId && bucketRoot && historyKey) {
-    candidates.push(`${bucketRoot}/${historyKey}_uc${strictUcId}.json`);
-    candidates.push(`${bucketRoot}/${historyKey}_${strictUcId}.json`);
+  const targetUcId = getTargetUcIdForCurrentFarm();
+  if (targetUcId && bucketRoot && historyKey) {
+    candidates.push(`${bucketRoot}/${historyKey}_uc${targetUcId}.json`);
+    candidates.push(`${bucketRoot}/${historyKey}_${targetUcId}.json`);
   }
 
   candidates.push(config.url);
@@ -875,7 +957,7 @@ async function fetchDashboardDataForCurrentFarm(config) {
       }
 
       const responseData = await response.json();
-      data = filterDataForCurrentFarm(responseData);
+      data = normalizeLiveDataForTopic(config, responseData);
 
       if (
         data !== null &&
@@ -1396,8 +1478,8 @@ function renderSimeparDaily(visualEl, dataRaw) {
 function isValidPlugDailyRecord(rec) {
   if (!rec || typeof rec !== "object") return false;
 
-  const tMin = rec.temp_min ?? rec.TempMin ?? null;
-  const tMax = rec.temp_max ?? rec.TempMax ?? null;
+  const tMin = rec.temp_min ?? rec.TempMin ?? rec.temperatura_min_c ?? null;
+  const tMax = rec.temp_max ?? rec.TempMax ?? rec.temperatura_max_c ?? null;
   const hum = rec.umidade_media ?? rec.umidade ?? rec.ur ?? null;
 
   if (tMin === 999) return false;
@@ -1441,14 +1523,19 @@ function renderPlugDaily(visualEl, dataRaw) {
   const grid = document.createElement("div");
   grid.className = "metric-grid";
 
-  const rawDate = data.data || "-";
-  const dateBR = rawDate && rawDate !== "-" ? formatDateBR(rawDate) : "-";
+  const rawDate = data.data || data.DataPrevisao || data.Data || "-";
+  const dateBR =
+    rawDate && rawDate !== "-"
+      ? String(rawDate).includes("/")
+        ? String(rawDate)
+        : formatDateBR(rawDate)
+      : "-";
 
   grid.appendChild(createMetric("Data", dateBR, "date"));
 
   grid.appendChild(createMetric("Chuva (mm)", data.precipitacao_mm ?? "-", "rain"));
-  grid.appendChild(createMetric("T. Máx (°C)", data.temp_max ?? "-", "temp"));
-  grid.appendChild(createMetric("T. Mín (°C)", data.temp_min ?? "-", "temp"));
+  grid.appendChild(createMetric("T. Máx (°C)", data.temp_max ?? data.temperatura_max_c ?? "-", "temp"));
+  grid.appendChild(createMetric("T. Mín (°C)", data.temp_min ?? data.temperatura_min_c ?? "-", "temp"));
   grid.appendChild(createMetric("Umidade média do ar (%)", data.umidade_media ?? "-", "air"));
 
   visualEl.appendChild(grid);
@@ -1463,6 +1550,7 @@ function normalizePlugHourlyArray(dataRaw) {
       if (
         firstItem["Data e Hora"] ||
         firstItem["DataHora"] ||
+        firstItem["Temperatura Méd."] ||
         firstItem["Temperatura MÃ©d."]
       ) {
         return dataRaw;
@@ -1481,7 +1569,32 @@ function normalizePlugHourlyArray(dataRaw) {
   }
 
   if (Array.isArray(dataRaw?.data)) {
-    return dataRaw.data;
+    if (dataRaw.data.length > 0) return dataRaw.data;
+  }
+
+  const daily = dashboardData["plugfield/forecast/daily"];
+  if (daily && typeof daily === "object") {
+    const rawDate = daily.DataPrevisao || daily.data || daily.Data || getTodayIsoDateLocal();
+    const datePart = String(rawDate).includes("/")
+      ? String(rawDate)
+      : formatDateBR(String(rawDate).slice(0, 10));
+    return [
+      {
+        "Data e Hora": `${datePart} ${new Date().toLocaleTimeString("pt-BR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        })}`,
+        "Temperatura Méd.": daily.temperatura_media_c ?? daily.temp_media ?? daily.temp ?? "-",
+        "Temperatura Mín.": daily.temperatura_min_c ?? daily.temp_min ?? "-",
+        "Temperatura Máx.": daily.temperatura_max_c ?? daily.temp_max ?? "-",
+        "Chuva": daily.precipitacao_mm ?? daily.chuva_mm ?? "-",
+        "Umidade": daily.umidade_media ?? "-",
+        "Radiação": daily.radiacao ?? "-",
+        "Estação": daily.estacao || daily.deviceName || "Estação meteorológica",
+        "_fallback_daily": true,
+      },
+    ];
   }
 
   return [];
@@ -1518,13 +1631,23 @@ function filterPlugHourlyList(dataRaw) {
         existing["Temperatura MÃ©d."] !== null &&
         existing["Temperatura MÃ©d."] !== "-" &&
         existing["Temperatura MÃ©d."] !== "";
+      const existingHasUtfData =
+        existing["Temperatura Méd."] !== undefined &&
+        existing["Temperatura Méd."] !== null &&
+        existing["Temperatura Méd."] !== "-" &&
+        existing["Temperatura Méd."] !== "";
       const currentHasData =
         item["Temperatura MÃ©d."] !== undefined &&
         item["Temperatura MÃ©d."] !== null &&
         item["Temperatura MÃ©d."] !== "-" &&
         item["Temperatura MÃ©d."] !== "";
+      const currentHasUtfData =
+        item["Temperatura Méd."] !== undefined &&
+        item["Temperatura Méd."] !== null &&
+        item["Temperatura Méd."] !== "-" &&
+        item["Temperatura Méd."] !== "";
 
-      if (currentHasData && !existingHasData) {
+      if ((currentHasData || currentHasUtfData) && !(existingHasData || existingHasUtfData)) {
         uniqueMap.set(horaKey, item);
       }
     } else {
@@ -1552,7 +1675,7 @@ function renderPlugHourly(visualEl, dataRaw) {
   });
 
   const horasComDados = sorted.filter((item) => {
-    const temp = item["Temperatura MÃ©d."];
+    const temp = item["Temperatura Méd."] ?? item["Temperatura MÃ©d."];
     const chuva = item["Chuva"];
     const rad = item["Radiação"];
 
@@ -1569,7 +1692,7 @@ function renderPlugHourly(visualEl, dataRaw) {
     const dh = item["Data e Hora"] || item["DataHora"] || "";
     const [dataStr, horaStr] = dh.split(" ");
     const hora = horaStr || dh;
-    const t = item["Temperatura MÃ©d."] ?? "-";
+    const t = item["Temperatura Méd."] ?? item["Temperatura MÃ©d."] ?? "-";
     const chuva = item["Chuva"] ?? "-";
     const rad = item["Radiação"] ?? "-";
     return [hora, t, chuva, rad];
@@ -1579,7 +1702,10 @@ function renderPlugHourly(visualEl, dataRaw) {
   title.style.fontSize = "0.8rem";
   title.style.color = "#9ca3af";
   title.style.marginBottom = "0.35rem";
-  title.textContent = `Horas previstas (${rows.length} registros) - Temperatura / Chuva / Radiação`;
+  const usesDailyFallback = rowsToShow.some((item) => item._fallback_daily);
+  title.textContent = usesDailyFallback
+    ? "Resumo diário da estação Plugfield - Temperatura / Chuva / Radiação"
+    : `Horas previstas (${rows.length} registros) - Temperatura / Chuva / Radiação`;
 
   const wrapper = document.createElement("div");
   wrapper.style.maxHeight = "260px";
@@ -2745,7 +2871,7 @@ async function loadJsonForTopic(config) {
         }
 
         const responseData = await response.json();
-        data = filterDataForCurrentFarm(responseData);
+        data = normalizeLiveDataForTopic(config, responseData);
 
         if (
           data !== null &&
@@ -2905,7 +3031,9 @@ async function loadJsonForTopic(config) {
 
 async function loadAllJsons() {
   console.log("ðŸ”„ Atualizando DADOS DO DASHBOARD apenas...");
-  await Promise.allSettled(TOPICS.map((config) => loadJsonForTopic(config)));
+  for (const config of TOPICS) {
+    await loadJsonForTopic(config);
+  }
 
   const lastUpdateEl = document.getElementById("lastUpdate");
   if (lastUpdateEl) {
