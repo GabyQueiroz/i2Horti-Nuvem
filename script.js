@@ -1626,19 +1626,17 @@ function filterPlugHourlyList(dataRaw) {
   const listaHoras = normalizePlugHourlyArray(dataRaw);
   if (!listaHoras.length) return [];
 
-  const { date } = globalFilter;
+  const targetDate = globalFilter.date || getTodayIsoDateLocal();
 
   let filtered = listaHoras;
 
-  if (date) {
-    filtered = filtered.filter((item) => {
-      const dh = item["Data e Hora"] || item["DataHora"] || "";
-      if (!dh) return true;
-      const [dPart] = dh.split(" ");
-      const iso = dPart.includes("/") ? dateBRToISO(dPart) : dPart;
-      return iso === date;
-    });
-  }
+  filtered = filtered.filter((item) => {
+    const dh = item["Data e Hora"] || item["DataHora"] || "";
+    if (!dh) return true;
+    const [dPart] = dh.split(" ");
+    const iso = dPart.includes("/") ? dateBRToISO(dPart) : dPart;
+    return iso === targetDate;
+  });
 
   const uniqueMap = new Map();
   filtered.forEach((item) => {
