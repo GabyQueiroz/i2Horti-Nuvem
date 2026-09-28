@@ -214,12 +214,27 @@ function normalizeLiveDataForTopic(config, rawData) {
     return unwrapTopicPayload(latest);
   }
 
+  if (config.topic === "canteiros/get") {
+    return filtered;
+  }
+
   const unwrapped = unwrapTopicPayload(filtered);
   if (!targetUcId) return unwrapped;
 
   const ucId = getRecordUcId(unwrapped);
   if (ucId === null || ucId === undefined) return unwrapped;
   return String(ucId) === String(targetUcId) ? unwrapped : null;
+}
+
+function normalizeHistoryDataForTopic(config, rawData) {
+  if (
+    config.topic === "irrigationRBS/schedule" ||
+    config.topic === "irrigationRL/schedule"
+  ) {
+    return filterDataForCurrentFarm(rawData);
+  }
+
+  return normalizeLiveDataForTopic(config, rawData);
 }
 
 function resetFarmDataState() {
@@ -1128,7 +1143,7 @@ async function fetchHistoryJsonForDate(config, isoDate) {
         return null;
       }
       const data = await resp.json();
-      return filterDataForCurrentFarm(data);
+      return normalizeHistoryDataForTopic(config, data);
     } catch (e) {
       console.error("Erro ao buscar histÃ³rico no S3 (padrÃ£o antigo):", e);
       return null;
@@ -1736,17 +1751,29 @@ function renderCanteiros(visualEl, data) {
   visualEl.innerHTML = "";
 
   let canteiros = [];
+  const appendCanteirosFromBlock = (block) => {
+    if (!block || typeof block !== "object") return;
+    if (Array.isArray(block.data)) {
+      canteiros.push(...block.data);
+      return;
+    }
+    if (block.data && typeof block.data === "object" && Array.isArray(block.data.data)) {
+      canteiros.push(...block.data.data);
+      return;
+    }
+    if (Array.isArray(block.canteiros)) {
+      canteiros.push(...block.canteiros);
+    }
+  };
 
   if (Array.isArray(data)) {
-    data.forEach((block) => {
-      if (Array.isArray(block?.data)) {
-        canteiros.push(...block.data);
-      }
-    });
+    data.forEach(appendCanteirosFromBlock);
   } else if (Array.isArray(data?.data)) {
     canteiros = data.data;
   } else if (data && typeof data === "object" && Array.isArray(data.canteiros)) {
     canteiros = data.canteiros;
+  } else if (data?.data && typeof data.data === "object") {
+    appendCanteirosFromBlock(data.data);
   }
 
   if (!canteiros.length) {
