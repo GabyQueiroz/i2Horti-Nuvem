@@ -58,6 +58,7 @@ const FARM_CONFIG = {
     unitLabel: "Luciane",
     ucId: "3003",
     strictUcId: "3003",
+    disabledTopics: ["plugfield/forecast/daily", "plugfield/forecast/hourly"],
   },
 };
 
@@ -102,6 +103,11 @@ const strictUcTopicSamplers = new Map();
 
 function getCurrentFarmConfig() {
   return FARM_CONFIG[currentFarm] || FARM_CONFIG.doisvizinhos;
+}
+
+function getTopicsForCurrentFarm() {
+  const disabledTopics = getCurrentFarmConfig().disabledTopics || [];
+  return TOPICS.filter((config) => !disabledTopics.includes(config.topic));
 }
 
 function getStrictUcIdForCurrentFarm() {
@@ -1342,6 +1348,7 @@ function showDashboard() {
   if (farmChanged) {
     activeFarmOnDashboard = currentFarm;
     resetFarmDataState();
+    createAllCards();
     loadHighlightsFromStorage();
     loadAllJsons();
 
@@ -2766,7 +2773,9 @@ function createCard(config) {
 }
 
 function createAllCards() {
-  TOPICS.forEach((config) => createCard(config));
+  const container = document.getElementById("cardsContainer");
+  if (container) container.innerHTML = "";
+  getTopicsForCurrentFarm().forEach((config) => createCard(config));
 }
 
 // ===============================
@@ -3031,7 +3040,7 @@ async function loadJsonForTopic(config) {
 
 async function loadAllJsons() {
   console.log("ðŸ”„ Atualizando DADOS DO DASHBOARD apenas...");
-  for (const config of TOPICS) {
+  for (const config of getTopicsForCurrentFarm()) {
     await loadJsonForTopic(config);
   }
 
@@ -4102,6 +4111,10 @@ function updateFarmContext() {
   const farmPill = document.getElementById("farmPill");
   const farmSubtitle = document.getElementById("farmSubtitle");
   const topicsDescription = document.getElementById("topicsDescription");
+  const globalFilterTag = document.getElementById("globalFilterTag");
+  const hasPlugfield = getTopicsForCurrentFarm().some((config) =>
+    config.topic.startsWith("plugfield/")
+  );
 
   if (farmPill) {
     farmPill.textContent = `Propriedade: ${farm.label}`;
@@ -4115,10 +4128,19 @@ function updateFarmContext() {
   }
 
   if (topicsDescription) {
+    const historicalSources = hasPlugfield
+      ? "previsão, Plugfield, RBS e RL"
+      : "previsão, RBS e RL";
     topicsDescription.innerHTML =
       `Os cards mostram os tópicos MQTT da unidade <strong>${farm.unitLabel}</strong>. ` +
       `Use o filtro abaixo para aplicar a mesma data/horário em todos os cards ` +
-      `com histórico (previsão, Plugfield, RBS e RL).`;
+      `com histórico (${historicalSources}).`;
+  }
+
+  if (globalFilterTag) {
+    globalFilterTag.textContent = hasPlugfield
+      ? "Aplica-se aos cards de previsão, Plugfield e decisões de irrigação (RBS e RL)."
+      : "Aplica-se aos cards de previsão e decisões de irrigação (RBS e RL).";
   }
 
   repairVisibleText();
