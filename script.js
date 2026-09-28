@@ -60,6 +60,22 @@ const FARM_CONFIG = {
     strictUcId: "3003",
     disabledTopics: ["plugfield/forecast/daily", "plugfield/forecast/hourly"],
   },
+  "miringuava-francisco": {
+    label: "Miringuava - Francisco",
+    location: "Miringuava",
+    unitLabel: "Francisco",
+    ucId: "3001",
+    strictUcId: "3001",
+    disabledTopics: ["plugfield/forecast/daily", "plugfield/forecast/hourly"],
+  },
+  "miringuava-rosaldo": {
+    label: "Miringuava - Rosaldo",
+    location: "Miringuava",
+    unitLabel: "Rosaldo",
+    ucId: "3002",
+    strictUcId: "3002",
+    disabledTopics: ["plugfield/forecast/daily", "plugfield/forecast/hourly"],
+  },
 };
 
 function isPassiveTopic(topic) {
