@@ -51,6 +51,7 @@ const FARM_CONFIG = {
     location: "PR",
     unitLabel: "Dois Vizinhos",
     ucId: "4000",
+    strictUcId: "4000",
   },
   "miringuava-luciane": {
     label: "Miringuava - Luciane",
@@ -1165,6 +1166,38 @@ async function fetchHistoryJsonForDate(config, isoDate) {
       return null;
     }
   }
+}
+
+async function fetchLatestArchivedIrrigation(config, maxLookbackDays = 30) {
+  if (
+    config.topic !== "irrigationRBS/schedule" &&
+    config.topic !== "irrigationRL/schedule"
+  ) {
+    return null;
+  }
+
+  const today = new Date(`${getTodayIsoDateLocal()}T00:00:00`);
+  for (let offset = 0; offset <= maxLookbackDays; offset += 1) {
+    const day = new Date(today);
+    day.setDate(today.getDate() - offset);
+    const isoDate = [day.getFullYear(), String(day.getMonth() + 1).padStart(2, "0"), String(day.getDate()).padStart(2, "0")].join("-");
+
+    try {
+      const rows = await fetchHistoryJsonForDate(config, isoDate);
+      if (Array.isArray(rows) && rows.length > 0) {
+        rows.sort((a, b) => {
+          const dateCompare = String(a.Data || "").localeCompare(String(b.Data || ""));
+          if (dateCompare !== 0) return dateCompare;
+          return String(a.Horario || "").localeCompare(String(b.Horario || ""));
+        });
+        return { data: rows, date: isoDate };
+      }
+    } catch (error) {
+      console.warn(`Falha ao consultar arquivo histórico de ${isoDate}:`, error);
+    }
+  }
+
+  return null;
 }
 
 // ===============================
@@ -2897,6 +2930,8 @@ async function loadJsonForTopic(config) {
   try {
     let data = null;
     let usedHistorySource = false;
+    let usedArchivedFallback = false;
+    let archivedFallbackDate = null;
 
     if (globalFilter.date) {
       data = await fetchHistoryJsonForDate(config, globalFilter.date);
@@ -2940,6 +2975,21 @@ async function loadJsonForTopic(config) {
           config.topic === "irrigationRL/schedule")
       ) {
         data = await fetchUcExecutionJson(config, getTodayIsoDateLocal());
+      }
+
+      if (
+        (data === null ||
+          data === undefined ||
+          (Array.isArray(data) && data.length === 0)) &&
+        (config.topic === "irrigationRBS/schedule" ||
+          config.topic === "irrigationRL/schedule")
+      ) {
+        const archived = await fetchLatestArchivedIrrigation(config);
+        if (archived) {
+          data = archived.data;
+          archivedFallbackDate = archived.date;
+          usedArchivedFallback = true;
+        }
       }
 
       if (
@@ -3017,15 +3067,26 @@ async function loadJsonForTopic(config) {
     repairVisibleText(card);
 
     statusDot.classList.add("online");
-    statusText.textContent = "OK";
+    statusText.textContent = usedArchivedFallback ? "Último histórico" : "OK";
     ensureStrictUcTopicSampler(config);
 
-    const now = new Date();
-    timeText.textContent = now.toLocaleTimeString("pt-BR", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
+    if (usedArchivedFallback) {
+      const latestRecord = Array.isArray(data)
+        ? data[data.length - 1]
+        : data;
+      const recordDate = latestRecord?.Data || archivedFallbackDate;
+      const recordTime = latestRecord?.Horario || "--:--";
+      timeText.textContent = `${recordDate ? formatDateBR(recordDate) : ""} ${recordTime}`.trim();
+      messageEl.style.display = "block";
+      messageEl.textContent = "Exibindo a última decisão encontrada no histórico; não há publicação mais recente disponível no S3.";
+    } else {
+      const now = new Date();
+      timeText.textContent = now.toLocaleTimeString("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+    }
 
   } catch (err) {
     console.error(`Erro ao carregar ${config.url}:`, err);
