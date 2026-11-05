@@ -2018,46 +2018,7 @@ function filterPlugHourlyList(dataRaw) {
   return Array.from(uniqueMap.values());
 }
 
-function renderPlugHourly(visualEl, dataRaw) {
-  visualEl.innerHTML = "";
-
-  const listaHoras = filterPlugHourlyList(dataRaw);
-
-  if (!listaHoras.length) {
-    visualEl.textContent = "Ainda não há dados horários para o filtro selecionado.";
-    return;
-  }
-
-  const sorted = [...listaHoras].sort((a, b) => {
-    const timeA = a["Data e Hora"] || a["DataHora"] || "";
-    const timeB = b["Data e Hora"] || b["DataHora"] || "";
-    return timeA.localeCompare(timeB);
-  });
-
-  const horasComDados = sorted.filter((item) => {
-    const temp = item["Temperatura Méd."] ?? item["Temperatura MÃ©d."];
-    const chuva = item["Chuva"];
-    const rad = item["Radiação"];
-
-    return (
-      (temp !== undefined && temp !== null && temp !== "-" && temp !== "") ||
-      (chuva !== undefined && chuva !== null && chuva !== "-" && chuva !== "") ||
-      (rad !== undefined && rad !== null && rad !== "-" && rad !== "")
-    );
-  });
-
-  const rowsToShow = horasComDados.length > 0 ? horasComDados : sorted;
-
-  const rows = rowsToShow.map((item) => {
-    const dh = item["Data e Hora"] || item["DataHora"] || "";
-    const [dataStr, horaStr] = dh.split(" ");
-    const hora = horaStr || dh;
-    const t = item["Temperatura Méd."] ?? item["Temperatura MÃ©d."] ?? "-";
-    const chuva = item["Chuva"] ?? "-";
-    const rad = item["Radiação"] ?? "-";
-    return [hora, t, chuva, rad];
-  });
-
+function renderUltimasMedidas(visualEl, dataRaw) {
   const ultimasMedidas = Array.isArray(dataRaw?.ultimas_medidas) ? dataRaw.ultimas_medidas : [];
   if (ultimasMedidas.length && !globalFilter.date) {
     const ultima = parseIsoToDate(dataRaw.ultima_leitura);
@@ -2093,6 +2054,52 @@ function renderPlugHourly(visualEl, dataRaw) {
     visualEl.appendChild(avisoEstacao);
     visualEl.appendChild(medidasWrapper);
   }
+  return ultimasMedidas.length > 0 && !globalFilter.date;
+}
+
+function renderPlugHourly(visualEl, dataRaw) {
+  visualEl.innerHTML = "";
+
+  const listaHoras = filterPlugHourlyList(dataRaw);
+
+  const temUltimasMedidas = renderUltimasMedidas(visualEl, dataRaw);
+
+  if (!listaHoras.length) {
+    if (!temUltimasMedidas) {
+      visualEl.textContent = "Ainda não há dados horários para o filtro selecionado.";
+    }
+    return;
+  }
+
+  const sorted = [...listaHoras].sort((a, b) => {
+    const timeA = a["Data e Hora"] || a["DataHora"] || "";
+    const timeB = b["Data e Hora"] || b["DataHora"] || "";
+    return timeA.localeCompare(timeB);
+  });
+
+  const horasComDados = sorted.filter((item) => {
+    const temp = item["Temperatura Méd."] ?? item["Temperatura MÃ©d."];
+    const chuva = item["Chuva"];
+    const rad = item["Radiação"];
+
+    return (
+      (temp !== undefined && temp !== null && temp !== "-" && temp !== "") ||
+      (chuva !== undefined && chuva !== null && chuva !== "-" && chuva !== "") ||
+      (rad !== undefined && rad !== null && rad !== "-" && rad !== "")
+    );
+  });
+
+  const rowsToShow = horasComDados.length > 0 ? horasComDados : sorted;
+
+  const rows = rowsToShow.map((item) => {
+    const dh = item["Data e Hora"] || item["DataHora"] || "";
+    const [dataStr, horaStr] = dh.split(" ");
+    const hora = horaStr || dh;
+    const t = item["Temperatura Méd."] ?? item["Temperatura MÃ©d."] ?? "-";
+    const chuva = item["Chuva"] ?? "-";
+    const rad = item["Radiação"] ?? "-";
+    return [hora, t, chuva, rad];
+  });
 
   const title = document.createElement("div");
   title.style.fontSize = "0.8rem";
