@@ -439,6 +439,9 @@ function getRecordUcId(record) {
 function unwrapTopicPayload(record) {
   if (!record || typeof record !== "object") return record;
   if (record.payload && typeof record.payload === "object") return record.payload;
+  if (Array.isArray(record.data) && (record.UC_id !== undefined || record.uc_id !== undefined)) {
+    return record;
+  }
   if (
     record.data &&
     typeof record.data === "object" &&
@@ -4002,7 +4005,7 @@ function renderHistoryTable(rows, mode = "irrigation") {
 
   const today = getTodayIsoDateLocal();
 
-  rows.forEach((r) => {
+  [...rows].reverse().forEach((r) => {
     const tr = document.createElement("tr");
 
     if (r.date === today) {
