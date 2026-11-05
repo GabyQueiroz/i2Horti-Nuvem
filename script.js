@@ -149,6 +149,7 @@ const STALE_HOURS_BY_TOPIC = {
   "previsao/simepar": 6,
 };
 let historyLoadInFlight = null;
+let historyLoadFarm = null;
 let plantingDefaultApplied = false;
 
 function formatCanteiroLabel(value) {
@@ -1473,6 +1474,16 @@ function renderPlantingFilterButtons() {
   const container = document.getElementById("plantingButtonsContainer");
   if (!container) return;
 
+  const plantingInfo = document.getElementById("plantingSelectedInfo");
+  const plantingAtual = getCurrentPlantingFilter();
+  if (plantingInfo) {
+    plantingInfo.textContent = plantingAtual
+      ? `Plantio selecionado: ${formatDateBR(plantingAtual.startDate)} até ${
+          plantingAtual.endDate ? formatDateBR(plantingAtual.endDate) : "-"
+        }.`
+      : "Nenhum plantio selecionado. Mostrando registros de toda a temporada.";
+  }
+
   container.innerHTML = "";
 
   if (!plantingFilters.length) {
@@ -1574,7 +1585,9 @@ function syncPlantingFiltersFromDashboard() {
 // ===============================
 
 async function loadCompleteHistoricalData(options = {}) {
-  if (historyLoadInFlight && !options.force) return historyLoadInFlight;
+  if (historyLoadInFlight && historyLoadFarm === currentFarm && !options.force) {
+    return historyLoadInFlight;
+  }
 
   const farmAtStart = currentFarm;
   const task = (async () => {
@@ -1589,15 +1602,17 @@ async function loadCompleteHistoricalData(options = {}) {
       startDate = isoDateFromLocal(recent);
     }
 
-    const dates = listDatesBetween(startDate, today);
+    const dates = listDatesBetween(startDate, today).reverse();
     const jobs = [];
-    ["irrigationRBS/schedule", "irrigationRL/schedule"].forEach((topic) => {
-      dates.forEach((date) => jobs.push({ topic, date }));
+    dates.forEach((date) => {
+      jobs.push({ topic: "irrigationRBS/schedule", date });
+      jobs.push({ topic: "irrigationRL/schedule", date });
     });
 
     const infoEl = document.getElementById("histInfo");
     const mostrarProgresso = !historicalData.complete || options.force;
     let concluidos = 0;
+    let ultimaTabela = 0;
 
     await runWithLimit(jobs, 12, async ({ topic, date }) => {
       if (currentFarm !== farmAtStart) return;
@@ -1615,8 +1630,20 @@ async function loadCompleteHistoricalData(options = {}) {
         console.warn(`Erro ao carregar ${topic} em ${date}:`, error);
       }
       concluidos += 1;
-      if (mostrarProgresso && infoEl && currentFarm === farmAtStart && concluidos % 20 === 0) {
-        infoEl.textContent = `Carregando histórico... ${Math.round((concluidos / jobs.length) * 100)}%`;
+      if (mostrarProgresso && currentFarm === farmAtStart && Date.now() - ultimaTabela > 1500) {
+        ultimaTabela = Date.now();
+        const historicoAberto = document
+          .getElementById("historyView")
+          ?.classList.contains("view-active");
+        if (historicoAberto && document.getElementById("histMethod")?.value !== "sensor") {
+          await applyHistoryFilters();
+        }
+        if (infoEl) {
+          const atual = infoEl.textContent.split(" (carregando")[0];
+          infoEl.textContent = `${atual} (carregando dias anteriores: ${Math.round(
+            (concluidos / jobs.length) * 100
+          )}%)`;
+        }
       }
     });
 
@@ -1630,6 +1657,7 @@ async function loadCompleteHistoricalData(options = {}) {
   })();
 
   historyLoadInFlight = task;
+  historyLoadFarm = farmAtStart;
   try {
     await task;
   } finally {
@@ -2027,6 +2055,42 @@ function renderPlugHourly(visualEl, dataRaw) {
     return [hora, t, chuva, rad];
   });
 
+  const ultimasMedidas = Array.isArray(dataRaw?.ultimas_medidas) ? dataRaw.ultimas_medidas : [];
+  if (ultimasMedidas.length && !globalFilter.date) {
+    const ultima = parseIsoToDate(dataRaw.ultima_leitura);
+    const avisoEstacao = document.createElement("div");
+    avisoEstacao.style.fontSize = "0.8rem";
+    avisoEstacao.style.color = "#b45309";
+    avisoEstacao.style.marginBottom = "0.35rem";
+    avisoEstacao.textContent = `Estação sem leitura hoje. Últimas horas medidas${
+      ultima
+        ? `, até ${ultima.toLocaleString("pt-BR", {
+            day: "2-digit",
+            month: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}`
+        : ""
+    }:`;
+    const medidasWrapper = document.createElement("div");
+    medidasWrapper.style.maxHeight = "260px";
+    medidasWrapper.style.overflow = "auto";
+    medidasWrapper.style.marginBottom = "0.6rem";
+    medidasWrapper.appendChild(
+      createMiniTable(
+        ["Hora", "Temp (°C)", "Chuva (mm)", "Umidade (%)"],
+        ultimasMedidas.map((item) => [
+          String(item["Data e Hora"] || "").slice(0, 5) + " " + (String(item["Data e Hora"] || "").split(" ")[1] || ""),
+          item["Temperatura Méd."] ?? "-",
+          item["Chuva"] ?? "-",
+          item["Umidade"] ?? "-",
+        ])
+      )
+    );
+    visualEl.appendChild(avisoEstacao);
+    visualEl.appendChild(medidasWrapper);
+  }
+
   const title = document.createElement("div");
   title.style.fontSize = "0.8rem";
   title.style.color = "#9ca3af";
@@ -2038,7 +2102,7 @@ function renderPlugHourly(visualEl, dataRaw) {
   title.textContent = usesDailyFallback
     ? "Resumo diário da estação Plugfield - Temperatura / Chuva / Radiação"
     : usesForecast
-    ? `Estação sem dados medidos. Horas previstas (${rows.length} registros) - Temperatura / Chuva / Radiação`
+    ? `Previsão para o restante do dia (${rows.length} ${rows.length === 1 ? "horário" : "horários"}) - Temperatura / Chuva / Radiação`
     : `${globalFilter.date && globalFilter.date !== getTodayIsoDateLocal() ? "O que ocorreu no dia" : "O que ocorreu até agora"} (${rows.length} horas) - Temperatura / Chuva / Radiação`;
 
   const wrapper = document.createElement("div");
