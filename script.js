@@ -1772,9 +1772,14 @@ function renderPlugHourly(visualEl, dataRaw) {
   title.style.color = "#9ca3af";
   title.style.marginBottom = "0.35rem";
   const usesDailyFallback = rowsToShow.some((item) => item._fallback_daily);
+  const usesForecast = rowsToShow.some((item) =>
+    String(item["Fonte"] || "").toLowerCase().includes("forecast")
+  );
   title.textContent = usesDailyFallback
     ? "Resumo diário da estação Plugfield - Temperatura / Chuva / Radiação"
-    : `Horas previstas (${rows.length} registros) - Temperatura / Chuva / Radiação`;
+    : usesForecast
+    ? `Estação sem dados medidos. Horas previstas (${rows.length} registros) - Temperatura / Chuva / Radiação`
+    : `O que ocorreu até agora (${rows.length} horas) - Temperatura / Chuva / Radiação`;
 
   const wrapper = document.createElement("div");
   wrapper.style.maxHeight = "260px";
@@ -1790,6 +1795,27 @@ function renderPlugHourly(visualEl, dataRaw) {
 
   visualEl.appendChild(title);
   visualEl.appendChild(wrapper);
+
+  const previsaoRows = Array.isArray(dataRaw?.previsao) ? dataRaw.previsao : [];
+  const targetDate = globalFilter.date || getTodayIsoDateLocal();
+  if (!usesForecast && !usesDailyFallback && previsaoRows.length && targetDate === getTodayIsoDateLocal()) {
+    const previsaoTitle = document.createElement("div");
+    previsaoTitle.style.fontSize = "0.8rem";
+    previsaoTitle.style.color = "#9ca3af";
+    previsaoTitle.style.margin = "0.6rem 0 0.35rem";
+    previsaoTitle.textContent = "Previsão para o restante do dia";
+    visualEl.appendChild(previsaoTitle);
+    visualEl.appendChild(
+      createMiniTable(
+        ["Hora", "Temp (°C)", "Chuva (mm)"],
+        previsaoRows.map((item) => [
+          String(item["Data e Hora"] || "").split(" ")[1] || "-",
+          item["Temperatura Méd."] ?? "-",
+          item["Chuva"] ?? "-",
+        ])
+      )
+    );
+  }
 }
 
 // ---------- CANTEIROS ----------
