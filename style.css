@@ -1643,3 +1643,6 @@ a {
   }
 }
 
+.dot-status.stale {
+  background: #f59e0b;
+}
