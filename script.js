@@ -249,7 +249,9 @@ function describeIrrigationDecision(rec, irrigationType) {
     const zonas = {
       abaixo_da_faixa: "Solo abaixo da faixa",
       na_faixa: "Solo dentro da faixa",
-      sem_sensor: "Sem leitura de umidade: usou a ETc",
+      sem_sensor: Number(balanco.desconto_chuva_prevista_mm) > 0
+        ? "Sem leitura de umidade: ETc menos a chuva prevista"
+        : "Sem leitura de umidade: usou a ETc",
       sem_faixa: "Faixa não definida: usou a ETc",
     };
     const base = zonas[zona] || "Balanço hídrico";
@@ -257,6 +259,9 @@ function describeIrrigationDecision(rec, irrigationType) {
   }
 
   if (zona === "acima_da_faixa") return "Solo acima da faixa";
+  if (zona === "sem_sensor" && Number(balanco.desconto_chuva_prevista_mm) > 0) {
+    return "Sem leitura de umidade: a chuva prevista cobre a necessidade";
+  }
   if (meteo.estrategia_aplicada === "CANCELAR_TOTAL") return "Chuva forte no dia anterior";
   if (Number(balanco.necessidade_final_diaria_mm) === 0 && Number(balanco.chuva_ontem_efetiva_mm) > 0) {
     return "Chuva do dia anterior cobriu a necessidade";
@@ -370,6 +375,9 @@ function buildRbsExplanation(rec) {
 
   if (balanco.ETc_total_mm !== undefined) {
     partes.push(`Consumo da cultura (ETc): ${fmtNum(balanco.ETc_total_mm, 2)} mm.`);
+  }
+  if (Number(balanco.desconto_chuva_prevista_mm) > 0) {
+    partes.push(`Desconto da chuva prevista: ${fmtNum(balanco.desconto_chuva_prevista_mm, 2)} mm.`);
   }
   if (Number(balanco.deficit_solo_mm) > 0) {
     partes.push(`Déficit do solo: ${fmtNum(balanco.deficit_solo_mm, 2)} mm.`);
